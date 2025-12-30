@@ -29,6 +29,7 @@ export interface DimensionScore {
   dimension_key: string
   points_awarded: number
   max_points: number
+  measured: boolean  // Contract v1: Whether this dimension was measured
   percentage: number
 }
 
@@ -49,6 +50,14 @@ export interface Action {
   url: string | null
 }
 
+export interface Column {
+  id: string
+  name: string
+  description: string | null
+  type: string | null
+  nullable: boolean | null
+}
+
 export interface ScoreHistory {
   id: string
   readiness_score: number
@@ -60,6 +69,7 @@ export interface DatasetDetail {
   id: string
   full_name: string
   display_name: string
+  description: string | null
   owner_name: string | null
   owner_contact: string | null
   intended_use: string | null
@@ -71,6 +81,7 @@ export interface DatasetDetail {
   dimension_scores: DimensionScore[]
   reasons: Reason[]
   actions: Action[]
+  columns: Column[]
   score_history: ScoreHistory[]
 }
 
@@ -208,6 +219,16 @@ export interface ColumnDescriptionsResponse {
   suggested_descriptions: Record<string, string>
 }
 
+export interface ApplyDescriptionRequest {
+  dataset_id: string
+  description: string
+}
+
+export interface ApplyColumnDescriptionsRequest {
+  dataset_id: string
+  column_descriptions: Record<string, string>
+}
+
 /**
  * Generate suggested dataset description
  */
@@ -255,6 +276,58 @@ export async function generateColumnDescriptions(
       throw new Error('AI assist is not enabled')
     }
     throw new Error(`Failed to generate descriptions: ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Apply AI-generated dataset description
+ */
+export async function applyDatasetDescription(
+  request: ApplyDescriptionRequest
+): Promise<DatasetDetail> {
+  const url = `${API_URL}/api/ai/apply-description`
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('AI assist is not enabled')
+    }
+    throw new Error(`Failed to apply description: ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Apply AI-generated column descriptions
+ */
+export async function applyColumnDescriptions(
+  request: ApplyColumnDescriptionsRequest
+): Promise<DatasetDetail> {
+  const url = `${API_URL}/api/ai/apply-column-descriptions`
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('AI assist is not enabled')
+    }
+    throw new Error(`Failed to apply column descriptions: ${response.statusText}`)
   }
 
   return response.json()

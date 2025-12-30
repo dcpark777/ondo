@@ -41,6 +41,7 @@ def upgrade() -> None:
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('full_name', sa.String(255), nullable=False, unique=True),
         sa.Column('display_name', sa.String(255), nullable=False),
+        sa.Column('description', sa.Text(), nullable=True),
         sa.Column('owner_name', sa.String(255), nullable=True),
         sa.Column('owner_contact', sa.String(255), nullable=True),
         sa.Column('intended_use', sa.Text(), nullable=True),
@@ -64,6 +65,7 @@ def upgrade() -> None:
         sa.Column('dimension_key', postgresql.ENUM('ownership', 'documentation', 'schema_hygiene', 'data_quality', 'stability', 'operational', name='dimension_key_enum', create_type=False), nullable=False),
         sa.Column('points_awarded', sa.Integer(), nullable=False),
         sa.Column('max_points', sa.Integer(), nullable=False),
+        sa.Column('measured', sa.Integer(), nullable=False, server_default='1'),
         sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='CASCADE'),
     )
     op.create_index('ix_dataset_dimension_scores_dataset_id', 'dataset_dimension_scores', ['dataset_id'])
@@ -103,6 +105,22 @@ def upgrade() -> None:
     op.create_index('ix_dataset_actions_action_key', 'dataset_actions', ['action_key'])
     op.create_index('idx_actions_dataset_key', 'dataset_actions', ['dataset_id', 'action_key'])
 
+    # Create dataset_columns table
+    op.create_table(
+        'dataset_columns',
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('dataset_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('description', sa.Text(), nullable=True),
+        sa.Column('type', sa.String(100), nullable=True),
+        sa.Column('nullable', sa.Integer(), nullable=True),
+        sa.Column('last_seen_at', sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='CASCADE'),
+        sa.UniqueConstraint('dataset_id', 'name', name='uq_dataset_column'),
+    )
+    op.create_index('ix_dataset_columns_dataset_id', 'dataset_columns', ['dataset_id'])
+    op.create_index('idx_columns_dataset_name', 'dataset_columns', ['dataset_id', 'name'])
+
     # Create dataset_score_history table
     op.create_table(
         'dataset_score_history',
@@ -122,6 +140,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop tables in reverse order
     op.drop_table('dataset_score_history')
+    op.drop_table('dataset_columns')
     op.drop_table('dataset_actions')
     op.drop_table('dataset_reasons')
     op.drop_table('dataset_dimension_scores')

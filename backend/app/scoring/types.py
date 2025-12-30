@@ -23,6 +23,7 @@ class DimensionScore:
     dimension_key: str
     points_awarded: int
     max_points: int
+    measured: bool = True  # Whether this dimension was measured (vs. not applicable)
 
     @property
     def percentage(self) -> float:

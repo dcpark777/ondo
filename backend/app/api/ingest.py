@@ -1,16 +1,24 @@
 """
-Mock ingestion endpoint for demo data.
+Ingestion endpoints for datasets.
 """
 
+import json
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.schemas import DatasetDetailResponse
 from app.db import get_db
 from app.models import Dataset, ReadinessStatusEnum
+from app.services.dbt_parser import (
+    DbtParseError,
+    merge_model_data,
+    parse_catalog,
+    parse_manifest,
+)
 from app.services.scoring_service import score_and_save_dataset
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])

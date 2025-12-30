@@ -9,6 +9,7 @@ Total: 20 points
 
 from typing import Dict, List
 
+from app.scoring.constants import ActionKey, ReasonCode
 from app.scoring.types import Action, DimensionScore, Reason
 
 
@@ -48,14 +49,14 @@ def score_data_quality(
         reasons.append(
             Reason(
                 dimension_key="data_quality",
-                reason_code="missing_quality_checks",
+                reason_code=ReasonCode.MISSING_QUALITY_CHECKS,
                 message="No freshness or volume checks configured",
                 points_lost=10,
             )
         )
         actions.append(
             Action(
-                action_key="add_quality_checks",
+                action_key=ActionKey.ADD_QUALITY_CHECKS,
                 title="Add data quality checks",
                 description="Configure freshness and volume checks (e.g., dbt tests) to monitor data quality",
                 points_gain=10,
@@ -75,14 +76,14 @@ def score_data_quality(
         reasons.append(
             Reason(
                 dimension_key="data_quality",
-                reason_code="missing_sla",
+                reason_code=ReasonCode.MISSING_SLA,
                 message="No SLA or intended use defined",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="define_sla",
+                action_key=ActionKey.DEFINE_SLA,
                 title="Define data SLA",
                 description="Define service level agreement or intended use cases for this dataset",
                 points_gain=5,
@@ -101,14 +102,14 @@ def score_data_quality(
             reasons.append(
                 Reason(
                     dimension_key="data_quality",
-                    reason_code="unresolved_failures",
+                    reason_code=ReasonCode.UNRESOLVED_FAILURES,
                     message=f"{unresolved_failures} unresolved data quality failures in last 30 days",
                     points_lost=5,
                 )
             )
             actions.append(
                 Action(
-                    action_key="resolve_failures",
+                    action_key=ActionKey.RESOLVE_FAILURES,
                     title="Resolve data quality failures",
                     description=f"Investigate and resolve {unresolved_failures} outstanding data quality failures",
                     points_gain=5,
@@ -117,10 +118,24 @@ def score_data_quality(
             )
     # If not provided, don't penalize (as per v1 requirements)
 
+    # Determine if measured: True if we have quality check info or SLA info
+    measured = (
+        has_quality_checks
+        or has_sla
+        or bool(intended_use)
+        or unresolved_failures is not None
+    )
+
+    # If not measured, don't penalize - remove all reasons and actions
+    if not measured:
+        reasons = []
+        actions = []
+
     dimension_score = DimensionScore(
         dimension_key="data_quality",
         points_awarded=points_awarded,
         max_points=max_points,
+        measured=measured,
     )
 
     return dimension_score, reasons, actions

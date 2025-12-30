@@ -9,6 +9,7 @@ Total: 20 points
 
 from typing import Dict, List
 
+from app.scoring.constants import ActionKey, ReasonCode
 from app.scoring.types import Action, DimensionScore, Reason
 
 
@@ -42,14 +43,14 @@ def score_stability(
             reasons.append(
                 Reason(
                     dimension_key="stability",
-                    reason_code="breaking_changes_detected",
+                    reason_code=ReasonCode.BREAKING_CHANGES_DETECTED,
                     message=f"{breaking_changes} breaking changes in last 30 days",
                     points_lost=10,
                 )
             )
             actions.append(
                 Action(
-                    action_key="prevent_breaking_changes",
+                    action_key=ActionKey.PREVENT_BREAKING_CHANGES,
                     title="Prevent breaking changes",
                     description="Review change management process to avoid breaking changes that impact downstream consumers",
                     points_gain=10,
@@ -69,14 +70,14 @@ def score_stability(
         reasons.append(
             Reason(
                 dimension_key="stability",
-                reason_code="missing_changelog",
+                reason_code=ReasonCode.MISSING_CHANGELOG,
                 message="Changes are not documented or versioned",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="add_changelog",
+                action_key=ActionKey.ADD_CHANGELOG,
                 title="Document schema changes",
                 description="Maintain release notes or changelog to document schema changes and versions",
                 points_gain=5,
@@ -93,14 +94,14 @@ def score_stability(
             reasons.append(
                 Reason(
                     dimension_key="stability",
-                    reason_code="backward_incompatible",
+                    reason_code=ReasonCode.BACKWARD_INCOMPATIBLE,
                     message="Schema changes break backward compatibility",
                     points_lost=5,
                 )
             )
             actions.append(
                 Action(
-                    action_key="maintain_compatibility",
+                    action_key=ActionKey.MAINTAIN_COMPATIBILITY,
                     title="Maintain backward compatibility",
                     description="Ensure schema changes maintain backward compatibility for existing consumers",
                     points_gain=5,
@@ -109,10 +110,24 @@ def score_stability(
             )
     # If not provided, don't penalize (as per v1 requirements)
 
+    # Determine if measured: True if we have any stability metadata
+    measured = (
+        breaking_changes is not None
+        or has_release_notes
+        or has_versioning
+        or backward_compatible is not None
+    )
+
+    # If not measured, don't penalize - remove all reasons and actions
+    if not measured:
+        reasons = []
+        actions = []
+
     dimension_score = DimensionScore(
         dimension_key="stability",
         points_awarded=points_awarded,
         max_points=max_points,
+        measured=measured,
     )
 
     return dimension_score, reasons, actions

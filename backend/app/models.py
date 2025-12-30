@@ -51,6 +51,7 @@ class Dataset(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     full_name = Column(String(255), unique=True, nullable=False, index=True)
     display_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)  # Dataset description for AI assist
     owner_name = Column(String(255), nullable=True, index=True)
     owner_contact = Column(String(255), nullable=True)
     intended_use = Column(Text, nullable=True)
@@ -74,6 +75,9 @@ class Dataset(Base):
     )
     actions = relationship(
         "DatasetAction", back_populates="dataset", cascade="all, delete-orphan"
+    )
+    columns = relationship(
+        "DatasetColumn", back_populates="dataset", cascade="all, delete-orphan"
     )
     score_history = relationship(
         "DatasetScoreHistory", back_populates="dataset", cascade="all, delete-orphan"
@@ -104,6 +108,9 @@ class DatasetDimensionScore(Base):
     )
     points_awarded = Column(Integer, nullable=False)
     max_points = Column(Integer, nullable=False)
+    measured = Column(
+        Integer, nullable=False, default=1, server_default="1"
+    )  # Boolean: 1=True, 0=False (using Integer for SQLite compatibility)
 
     # Relationships
     dataset = relationship("Dataset", back_populates="dimension_scores")
@@ -166,6 +173,37 @@ class DatasetAction(Base):
 
     __table_args__ = (
         Index("idx_actions_dataset_key", "dataset_id", "action_key"),
+    )
+
+
+class DatasetColumn(Base):
+    """Column metadata for datasets."""
+
+    __tablename__ = "dataset_columns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    type = Column(String(100), nullable=True)  # Column data type
+    nullable = Column(
+        Integer, nullable=True
+    )  # Boolean: 1=True, 0=False, NULL=unknown (using Integer for SQLite compatibility)
+    last_seen_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow
+    )
+
+    # Relationships
+    dataset = relationship("Dataset", back_populates="columns")
+
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "name", name="uq_dataset_column"),
+        Index("idx_columns_dataset_name", "dataset_id", "name"),
     )
 
 

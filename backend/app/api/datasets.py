@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import (
     ActionResponse,
+    ColumnResponse,
     DatasetDetailResponse,
     DatasetListItem,
     DatasetListResponse,
@@ -24,6 +25,7 @@ from app.db import get_db
 from app.models import (
     Dataset,
     DatasetAction,
+    DatasetColumn,
     DatasetDimensionScore,
     DatasetReason,
     DatasetScoreHistory,
@@ -37,17 +39,23 @@ router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
 
 def _dimension_score_to_response(dim_score: DatasetDimensionScore) -> DimensionScoreResponse:
-    """Convert dimension score model to response schema."""
+    """Convert dimension score model to response schema.
+    
+    Contract v1: Returns stable shape with measured flag.
+    """
     # dimension_key is stored as string, convert to value if it's an enum
     dimension_key_value = (
         dim_score.dimension_key.value
         if isinstance(dim_score.dimension_key, DimensionKeyEnum)
         else str(dim_score.dimension_key)
     )
+    # Convert measured from integer (1/0) to boolean
+    measured = bool(dim_score.measured) if hasattr(dim_score, "measured") else True
     return DimensionScoreResponse(
         dimension_key=dimension_key_value,
         points_awarded=dim_score.points_awarded,
         max_points=dim_score.max_points,
+        measured=measured,
         percentage=(dim_score.points_awarded / dim_score.max_points * 100)
         if dim_score.max_points > 0
         else 0.0,
@@ -81,6 +89,17 @@ def _action_to_response(action: DatasetAction) -> ActionResponse:
         points_gain=action.points_gain,
         dimension_key=None,  # Note: dimension_key not stored in actions table
         url=action.url,
+    )
+
+
+def _column_to_response(column: DatasetColumn) -> ColumnResponse:
+    """Convert column model to response schema."""
+    return ColumnResponse(
+        id=column.id,
+        name=column.name,
+        description=column.description,
+        type=column.type,
+        nullable=bool(column.nullable) if column.nullable is not None else None,
     )
 
 
@@ -183,19 +202,75 @@ def get_dataset(dataset_id: UUID, db: Session = Depends(get_db)):
         .all()
     )
 
-    # Get reasons
-    reasons = (
+    # Get dimension scores to check measured status
+    dimension_scores_dict = {
+        ds.dimension_key.lower(): bool(ds.measured) if hasattr(ds, "measured") else True
+        for ds in dimension_scores
+    }
+
+    # Get reasons - filter out reasons for unmeasured dimensions
+    all_reasons = (
         db.query(DatasetReason)
         .filter(DatasetReason.dataset_id == dataset_id)
         .order_by(DatasetReason.dimension_key, DatasetReason.points_lost.desc())
         .all()
     )
+    # Only include reasons for measured dimensions
+    reasons = [
+        r for r in all_reasons
+        if dimension_scores_dict.get(r.dimension_key.lower(), True)
+    ]
 
-    # Get actions
-    actions = (
+    # Helper to map action_key to dimension_key
+    def get_dimension_key_from_action_key(action_key: str) -> Optional[str]:
+        """Map action_key constant to dimension_key."""
+        from app.scoring.constants import ActionKey
+        
+        mapping = {
+            # Ownership
+            ActionKey.ASSIGN_OWNER: "ownership",
+            ActionKey.ADD_OWNER_CONTACT: "ownership",
+            # Documentation
+            ActionKey.ADD_DESCRIPTION: "documentation",
+            ActionKey.DOCUMENT_COLUMNS: "documentation",
+            # Schema hygiene
+            ActionKey.FIX_NAMING: "schema_hygiene",
+            ActionKey.REDUCE_NULLABLE_COLUMNS: "schema_hygiene",
+            ActionKey.REMOVE_LEGACY_COLUMNS: "schema_hygiene",
+            # Data quality
+            ActionKey.ADD_QUALITY_CHECKS: "data_quality",
+            ActionKey.DEFINE_SLA: "data_quality",
+            ActionKey.RESOLVE_FAILURES: "data_quality",
+            # Stability
+            ActionKey.PREVENT_BREAKING_CHANGES: "stability",
+            ActionKey.ADD_CHANGELOG: "stability",
+            ActionKey.MAINTAIN_COMPATIBILITY: "stability",
+            # Operational
+            ActionKey.DEFINE_INTENDED_USE: "operational",
+            ActionKey.DOCUMENT_LIMITATIONS: "operational",
+        }
+        return mapping.get(action_key)
+
+    # Get actions - filter out actions for unmeasured dimensions
+    all_actions = (
         db.query(DatasetAction)
         .filter(DatasetAction.dataset_id == dataset_id)
         .order_by(DatasetAction.points_gain.desc())
+        .all()
+    )
+    # Only include actions for measured dimensions
+    actions = [
+        a for a in all_actions
+        if dimension_scores_dict.get(
+            get_dimension_key_from_action_key(a.action_key) or "", True
+        )
+    ]
+
+    # Get columns (schema)
+    columns = (
+        db.query(DatasetColumn)
+        .filter(DatasetColumn.dataset_id == dataset_id)
+        .order_by(DatasetColumn.name)
         .all()
     )
 
@@ -213,6 +288,7 @@ def get_dataset(dataset_id: UUID, db: Session = Depends(get_db)):
         id=dataset.id,
         full_name=dataset.full_name,
         display_name=dataset.display_name,
+        description=dataset.description if hasattr(dataset, "description") else None,
         owner_name=dataset.owner_name,
         owner_contact=dataset.owner_contact,
         intended_use=dataset.intended_use,
@@ -224,6 +300,7 @@ def get_dataset(dataset_id: UUID, db: Session = Depends(get_db)):
         dimension_scores=[_dimension_score_to_response(ds) for ds in dimension_scores],
         reasons=[_reason_to_response(r) for r in reasons],
         actions=[_action_to_response(a) for a in actions],
+        columns=[_column_to_response(c) for c in columns],
         score_history=[_score_history_to_response(h) for h in score_history],
     )
 

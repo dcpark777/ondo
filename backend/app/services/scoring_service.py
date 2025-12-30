@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     Dataset,
     DatasetAction,
+    DatasetColumn,
     DatasetDimensionScore,
     DatasetReason,
     DatasetScoreHistory,
@@ -43,12 +44,13 @@ def score_and_save_dataset(
     dataset.readiness_status = score_result.status.value  # Pass value string directly
     dataset.last_scored_at = datetime.utcnow()
 
-    # Delete existing dimension scores, reasons, and actions
+    # Delete existing dimension scores, reasons, actions, and columns
     db.query(DatasetDimensionScore).filter(
         DatasetDimensionScore.dataset_id == dataset.id
     ).delete()
     db.query(DatasetReason).filter(DatasetReason.dataset_id == dataset.id).delete()
     db.query(DatasetAction).filter(DatasetAction.dataset_id == dataset.id).delete()
+    db.query(DatasetColumn).filter(DatasetColumn.dataset_id == dataset.id).delete()
 
     # Create dimension scores
     for dim_score in score_result.dimension_scores:
@@ -57,6 +59,7 @@ def score_and_save_dataset(
             dimension_key=dim_score.dimension_key.lower(),  # Pass value string directly
             points_awarded=dim_score.points_awarded,
             max_points=dim_score.max_points,
+            measured=1 if dim_score.measured else 0,  # Store as integer (1=True, 0=False)
         )
         db.add(db_dim_score)
 
@@ -82,6 +85,20 @@ def score_and_save_dataset(
             url=action.url,
         )
         db.add(db_action)
+
+    # Create columns if provided in metadata
+    columns = metadata.get("columns", [])
+    if columns:
+        for col in columns:
+            db_column = DatasetColumn(
+                dataset_id=dataset.id,
+                name=col.get("name", ""),
+                description=col.get("description"),
+                type=col.get("type"),
+                nullable=1 if col.get("nullable") is True else (0 if col.get("nullable") is False else None),
+                last_seen_at=datetime.utcnow(),
+            )
+            db.add(db_column)
 
     # Create score history entry
     history = DatasetScoreHistory(

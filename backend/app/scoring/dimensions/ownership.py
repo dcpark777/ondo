@@ -8,6 +8,7 @@ Total: 15 points
 
 from typing import Dict, List, Optional
 
+from app.scoring.constants import ActionKey, ReasonCode
 from app.scoring.types import Action, DimensionScore, Reason
 
 
@@ -40,14 +41,14 @@ def score_ownership(
         reasons.append(
             Reason(
                 dimension_key="ownership",
-                reason_code="missing_owner",
+                reason_code=ReasonCode.MISSING_OWNER,
                 message="No owner assigned",
                 points_lost=10,
             )
         )
         actions.append(
             Action(
-                action_key="assign_owner",
+                action_key=ActionKey.ASSIGN_OWNER,
                 title="Assign dataset owner",
                 description="Assign a clear owner responsible for this dataset",
                 points_gain=10,
@@ -64,14 +65,14 @@ def score_ownership(
             reasons.append(
                 Reason(
                     dimension_key="ownership",
-                    reason_code="missing_contact",
+                    reason_code=ReasonCode.MISSING_CONTACT,
                     message="Owner contact/escalation channel not defined",
                     points_lost=5,
                 )
             )
             actions.append(
                 Action(
-                    action_key="add_owner_contact",
+                    action_key=ActionKey.ADD_OWNER_CONTACT,
                     title="Add owner contact information",
                     description="Add escalation channel (Slack, email, etc.) for the owner",
                     points_gain=5,
@@ -86,6 +87,7 @@ def score_ownership(
         dimension_key="ownership",
         points_awarded=points_awarded,
         max_points=max_points,
+        measured=True,  # Ownership is always measurable
     )
 
     return dimension_score, reasons, actions

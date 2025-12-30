@@ -11,23 +11,30 @@ from pydantic import BaseModel, Field
 
 # Base schemas
 class DimensionScoreResponse(BaseModel):
-    """Dimension score response."""
+    """Dimension score response.
+    
+    Contract v1: Stable response shape for UI compatibility.
+    """
 
     dimension_key: str
     points_awarded: int
     max_points: int
-    percentage: float
+    measured: bool  # Whether this dimension was measured (vs. not applicable)
+    percentage: float  # Calculated: (points_awarded / max_points) * 100
 
     class Config:
         from_attributes = True
 
 
 class ReasonResponse(BaseModel):
-    """Reason for point loss."""
+    """Reason for point loss.
+    
+    Contract v1: Stable response shape with versioned reason_code constants.
+    """
 
     id: UUID
     dimension_key: str
-    reason_code: str
+    reason_code: str  # Stable constant from ReasonCode class
     message: str
     points_lost: int
 
@@ -36,14 +43,17 @@ class ReasonResponse(BaseModel):
 
 
 class ActionResponse(BaseModel):
-    """Recommended action to improve score."""
+    """Recommended action to improve score.
+    
+    Contract v1: Stable response shape with versioned action_key constants.
+    """
 
     id: UUID
-    action_key: str
+    action_key: str  # Stable constant from ActionKey class
     title: str
     description: str
     points_gain: int
-    url: Optional[str] = None
+    url: Optional[str] = None  # Optional URL for action documentation
 
     class Config:
         from_attributes = True
@@ -56,6 +66,19 @@ class ScoreHistoryResponse(BaseModel):
     readiness_score: int
     recorded_at: datetime
     scoring_version: str
+
+    class Config:
+        from_attributes = True
+
+
+class ColumnResponse(BaseModel):
+    """Column metadata response."""
+
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    type: Optional[str] = None
+    nullable: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -91,6 +114,7 @@ class DatasetDetailResponse(BaseModel):
     id: UUID
     full_name: str
     display_name: str
+    description: Optional[str] = None  # Dataset description
     owner_name: Optional[str] = None
     owner_contact: Optional[str] = None
     intended_use: Optional[str] = None
@@ -102,6 +126,7 @@ class DatasetDetailResponse(BaseModel):
     dimension_scores: List[DimensionScoreResponse]
     reasons: List[ReasonResponse]
     actions: List[ActionResponse]
+    columns: List[ColumnResponse]  # Schema/columns
     score_history: List[ScoreHistoryResponse]
 
     class Config:

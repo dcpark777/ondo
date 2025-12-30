@@ -8,6 +8,7 @@ Total: 10 points
 
 from typing import Dict, List
 
+from app.scoring.constants import ActionKey, ReasonCode
 from app.scoring.types import Action, DimensionScore, Reason
 
 
@@ -40,14 +41,14 @@ def score_operational(
         reasons.append(
             Reason(
                 dimension_key="operational",
-                reason_code="missing_intended_use",
+                reason_code=ReasonCode.MISSING_INTENDED_USE,
                 message="Intended use cases not defined",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="define_intended_use",
+                action_key=ActionKey.DEFINE_INTENDED_USE,
                 title="Define intended use cases",
                 description="Document the intended use cases and consumers for this dataset",
                 points_gain=5,
@@ -62,14 +63,14 @@ def score_operational(
         reasons.append(
             Reason(
                 dimension_key="operational",
-                reason_code="missing_limitations",
+                reason_code=ReasonCode.MISSING_LIMITATIONS,
                 message="Known limitations not documented",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="document_limitations",
+                action_key=ActionKey.DOCUMENT_LIMITATIONS,
                 title="Document known limitations",
                 description="Document any known limitations, caveats, or constraints for this dataset",
                 points_gain=5,
@@ -81,6 +82,7 @@ def score_operational(
         dimension_key="operational",
         points_awarded=points_awarded,
         max_points=max_points,
+        measured=True,  # Operational metadata is always measurable
     )
 
     return dimension_score, reasons, actions

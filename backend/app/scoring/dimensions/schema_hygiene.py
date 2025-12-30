@@ -10,6 +10,7 @@ Total: 15 points
 import re
 from typing import Dict, List
 
+from app.scoring.constants import ActionKey, ReasonCode
 from app.scoring.types import Action, DimensionScore, Reason
 
 
@@ -42,6 +43,7 @@ def score_schema_hygiene(
             dimension_key="schema_hygiene",
             points_awarded=0,
             max_points=max_points,
+            measured=False,  # Not measured if no column info
         )
         return dimension_score, reasons, actions
 
@@ -60,14 +62,14 @@ def score_schema_hygiene(
         reasons.append(
             Reason(
                 dimension_key="schema_hygiene",
-                reason_code="naming_convention_violations",
+                reason_code=ReasonCode.NAMING_CONVENTION_VIOLATIONS,
                 message=f"{len(naming_issues)} columns violate snake_case naming (e.g., {naming_issues[0] if naming_issues else 'N/A'})",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="fix_naming",
+                action_key=ActionKey.FIX_NAMING,
                 title="Fix column naming conventions",
                 description=f"Rename {len(naming_issues)} columns to follow snake_case convention",
                 points_gain=5,
@@ -91,14 +93,14 @@ def score_schema_hygiene(
             reasons.append(
                 Reason(
                     dimension_key="schema_hygiene",
-                    reason_code="high_nullable_ratio",
+                    reason_code=ReasonCode.HIGH_NULLABLE_RATIO,
                     message=f"{int(nullable_ratio * 100)}% of columns are nullable (threshold: 50%)",
                     points_lost=5,
                 )
             )
             actions.append(
                 Action(
-                    action_key="reduce_nullable_columns",
+                    action_key=ActionKey.REDUCE_NULLABLE_COLUMNS,
                     title="Reduce nullable columns",
                     description="Review and make columns non-nullable where appropriate to improve data quality",
                     points_gain=5,
@@ -122,14 +124,14 @@ def score_schema_hygiene(
         reasons.append(
             Reason(
                 dimension_key="schema_hygiene",
-                reason_code="legacy_columns_detected",
+                reason_code=ReasonCode.LEGACY_COLUMNS_DETECTED,
                 message=f"{len(legacy_columns)} legacy/unused columns detected (ending in _tmp, _old, etc.)",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="remove_legacy_columns",
+                action_key=ActionKey.REMOVE_LEGACY_COLUMNS,
                 title="Remove legacy columns",
                 description=f"Remove or rename {len(legacy_columns)} legacy columns to clean up schema",
                 points_gain=5,
@@ -141,6 +143,7 @@ def score_schema_hygiene(
         dimension_key="schema_hygiene",
         points_awarded=points_awarded,
         max_points=max_points,
+        measured=True,  # Measured if we have column info
     )
 
     return dimension_score, reasons, actions

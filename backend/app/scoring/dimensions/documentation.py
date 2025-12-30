@@ -9,6 +9,7 @@ Total: 20 points
 
 from typing import Dict, List
 
+from app.scoring.constants import ActionKey, ReasonCode
 from app.scoring.types import Action, DimensionScore, Reason
 
 
@@ -44,14 +45,14 @@ def score_documentation(
         reasons.append(
             Reason(
                 dimension_key="documentation",
-                reason_code="missing_description",
+                reason_code=ReasonCode.MISSING_DESCRIPTION,
                 message="Dataset description is missing",
                 points_lost=5,
             )
         )
         actions.append(
             Action(
-                action_key="add_description",
+                action_key=ActionKey.ADD_DESCRIPTION,
                 title="Add dataset description",
                 description="Write a clear description explaining what this dataset contains and its purpose",
                 points_gain=5,
@@ -77,14 +78,14 @@ def score_documentation(
             reasons.append(
                 Reason(
                     dimension_key="documentation",
-                    reason_code="insufficient_column_docs",
+                    reason_code=ReasonCode.INSUFFICIENT_COLUMN_DOCS,
                     message=f"Only {int(documented_ratio * 100)}% of columns documented ({undocumented_count} columns missing docs)",
                     points_lost=points_lost,
                 )
             )
             actions.append(
                 Action(
-                    action_key="document_columns",
+                    action_key=ActionKey.DOCUMENT_COLUMNS,
                     title="Document missing columns",
                     description=f"Add descriptions for {undocumented_count} undocumented columns (target: 80% coverage)",
                     points_gain=10,
@@ -96,10 +97,14 @@ def score_documentation(
         # In v1, we mark as "not measured yet"
         pass
 
+    # Determine if measured: True if we have column info, False if no columns provided
+    measured = len(columns) > 0 if columns else True  # Description is always measurable
+    
     dimension_score = DimensionScore(
         dimension_key="documentation",
         points_awarded=points_awarded,
         max_points=max_points,
+        measured=measured,
     )
 
     return dimension_score, reasons, actions

@@ -24,7 +24,7 @@ def build_metadata_from_dataset(
     metadata = {
         "owner_name": dataset.owner_name,
         "owner_contact": dataset.owner_contact,
-        "description": None,  # Not stored in Dataset model currently
+        "description": dataset.description if hasattr(dataset, "description") else None,
         "columns": columns or [],
         "intended_use": dataset.intended_use,
         "limitations": dataset.limitations,

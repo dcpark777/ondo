@@ -11,6 +11,9 @@ pydantic>=2.0.0
 # Optional: for async support (if needed later)
 # asyncpg>=0.29.0
 
+# Schema conversion
+avrotize>=0.1.0
+
 # Testing
 pytest>=7.4.0
 pytest-asyncio>=0.21.0

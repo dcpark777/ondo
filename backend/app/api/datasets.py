@@ -34,6 +34,18 @@ from app.models import (
 )
 from app.services.dataset_metadata import build_metadata_from_dataset
 from app.services.scoring_service import score_and_save_dataset
+from app.services.schema_generator import (
+    columns_to_avro_schema,
+    generate_protobuf_schema,
+    generate_scala_schema,
+    generate_python_schema,
+)
+from app.services.schema_generator import (
+    columns_to_avro_schema,
+    generate_protobuf_schema,
+    generate_scala_schema,
+    generate_python_schema,
+)
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
@@ -87,7 +99,6 @@ def _action_to_response(action: DatasetAction) -> ActionResponse:
         title=action.title,
         description=action.description,
         points_gain=action.points_gain,
-        dimension_key=None,  # Note: dimension_key not stored in actions table
         url=action.url,
     )
 
@@ -293,6 +304,8 @@ def get_dataset(dataset_id: UUID, db: Session = Depends(get_db)):
         owner_contact=dataset.owner_contact,
         intended_use=dataset.intended_use,
         limitations=dataset.limitations,
+        location_type=dataset.location_type if hasattr(dataset, "location_type") else None,
+        location_data=dataset.location_data if hasattr(dataset, "location_data") else None,
         last_seen_at=dataset.last_seen_at,
         last_scored_at=dataset.last_scored_at,
         readiness_score=dataset.readiness_score,
@@ -376,3 +389,152 @@ def update_metadata(
     # Return updated dataset detail
     return get_dataset(dataset_id, db)
 
+
+
+@router.get("/{dataset_id}/schema/protobuf")
+def get_protobuf_schema(dataset_id: UUID, db: Session = Depends(get_db)):
+    """
+    Generate Protocol Buffers schema for a dataset.
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Get columns
+    columns = (
+        db.query(DatasetColumn)
+        .filter(DatasetColumn.dataset_id == dataset_id)
+        .order_by(DatasetColumn.name)
+        .all()
+    )
+
+    if not columns:
+        raise HTTPException(
+            status_code=400, detail="Dataset has no columns. Cannot generate schema."
+        )
+
+    # Convert columns to response format
+    column_responses = [_column_to_response(c) for c in columns]
+
+    # Generate namespace from dataset name
+    namespace = ".".join(dataset.full_name.split(".")[:-1]) if "." in dataset.full_name else "com.example"
+
+    # Convert to Avro schema
+    avro_schema = columns_to_avro_schema(
+        dataset_name=dataset.display_name or dataset.full_name,
+        namespace=namespace,
+        columns=column_responses,
+        description=dataset.description,
+    )
+
+    # Generate protobuf schema
+    try:
+        proto_schema, proto_tests = generate_protobuf_schema(avro_schema)
+        return {
+            "schema": proto_schema,
+            "test_code": proto_tests,
+            "format": "protobuf",
+            "dataset_name": dataset.display_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate protobuf schema: {str(e)}")
+
+
+@router.get("/{dataset_id}/schema/scala")
+def get_scala_schema(dataset_id: UUID, db: Session = Depends(get_db)):
+    """
+    Generate Java classes for a dataset (Scala-compatible).
+    Note: Avrotize doesn't have direct Scala support, so Java classes are generated
+    which Scala can use directly.
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Get columns
+    columns = (
+        db.query(DatasetColumn)
+        .filter(DatasetColumn.dataset_id == dataset_id)
+        .order_by(DatasetColumn.name)
+        .all()
+    )
+
+    if not columns:
+        raise HTTPException(
+            status_code=400, detail="Dataset has no columns. Cannot generate schema."
+        )
+
+    # Convert columns to response format
+    column_responses = [_column_to_response(c) for c in columns]
+
+    # Generate namespace from dataset name
+    namespace = ".".join(dataset.full_name.split(".")[:-1]) if "." in dataset.full_name else "com.example"
+
+    # Convert to Avro schema
+    avro_schema = columns_to_avro_schema(
+        dataset_name=dataset.display_name or dataset.full_name,
+        namespace=namespace,
+        columns=column_responses,
+        description=dataset.description,
+    )
+
+    # Generate Scala schema
+    try:
+        scala_schema, scala_tests = generate_scala_schema(avro_schema)
+        return {
+            "schema": scala_schema,
+            "test_code": scala_tests,
+            "format": "scala",
+            "dataset_name": dataset.display_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate Scala schema: {str(e)}")
+
+
+@router.get("/{dataset_id}/schema/python")
+def get_python_schema(dataset_id: UUID, db: Session = Depends(get_db)):
+    """
+    Generate Python dataclass for a dataset.
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Get columns
+    columns = (
+        db.query(DatasetColumn)
+        .filter(DatasetColumn.dataset_id == dataset_id)
+        .order_by(DatasetColumn.name)
+        .all()
+    )
+
+    if not columns:
+        raise HTTPException(
+            status_code=400, detail="Dataset has no columns. Cannot generate schema."
+        )
+
+    # Convert columns to response format
+    column_responses = [_column_to_response(c) for c in columns]
+
+    # Generate namespace from dataset name
+    namespace = ".".join(dataset.full_name.split(".")[:-1]) if "." in dataset.full_name else "com.example"
+
+    # Convert to Avro schema
+    avro_schema = columns_to_avro_schema(
+        dataset_name=dataset.display_name or dataset.full_name,
+        namespace=namespace,
+        columns=column_responses,
+        description=dataset.description,
+    )
+
+    # Generate Python schema
+    try:
+        python_schema, python_tests = generate_python_schema(avro_schema)
+        return {
+            "schema": python_schema,
+            "test_code": python_tests,
+            "format": "python",
+            "dataset_name": dataset.display_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate Python schema: {str(e)}")

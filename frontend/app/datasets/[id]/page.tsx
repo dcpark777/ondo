@@ -42,7 +42,7 @@ export default function DatasetDetailPage() {
   const [applyingColumns, setApplyingColumns] = useState(false)
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'metadata' | 'schema' | 'history'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'metadata' | 'schema'>('overview')
 
   const fetchDataset = async () => {
     setLoading(true)

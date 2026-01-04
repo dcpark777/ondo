@@ -74,6 +74,8 @@ export interface DatasetDetail {
   owner_contact: string | null
   intended_use: string | null
   limitations: string | null
+  location_type: string | null
+  location_data: Record<string, any> | null
   last_seen_at: string
   last_scored_at: string | null
   readiness_score: number
@@ -333,3 +335,73 @@ export async function applyColumnDescriptions(
   return response.json()
 }
 
+
+/**
+ * Schema generation interfaces
+ */
+export interface SchemaGenerationResponse {
+  schema: string
+  test_code: string
+  format: string
+  dataset_name: string
+}
+
+/**
+ * Generate Protocol Buffers schema for a dataset
+ */
+export async function generateProtobufSchema(id: string): Promise<SchemaGenerationResponse> {
+  const url = `${API_URL}/api/datasets/${id}/schema/protobuf`
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate protobuf schema: ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Generate Scala case class for a dataset
+ */
+export async function generateScalaSchema(id: string): Promise<SchemaGenerationResponse> {
+  const url = `${API_URL}/api/datasets/${id}/schema/scala`
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate Scala schema: ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Generate Python dataclass for a dataset
+ */
+export async function generatePythonSchema(id: string): Promise<SchemaGenerationResponse> {
+  const url = `${API_URL}/api/datasets/${id}/schema/python`
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate Python schema: ${response.statusText}`)
+  }
+
+  return response.json()
+}

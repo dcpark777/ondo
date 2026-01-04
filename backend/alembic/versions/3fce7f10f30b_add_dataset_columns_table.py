@@ -21,7 +21,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Create dataset_columns table
-    op.create_table(
+    # Note: This table may already exist in the initial migration
+    # Check if table exists before creating
+    conn = op.get_bind()
+    
+    # Check if table exists
+    result = conn.execute(sa.text("""
+        SELECT COUNT(*) 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'dataset_columns'
+    """))
+    
+    table_exists = result.scalar() > 0
+    
+    if not table_exists:
+        # Table doesn't exist, create it
+        op.create_table(
         'dataset_columns',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('dataset_id', postgresql.UUID(as_uuid=True), nullable=False),
@@ -33,8 +49,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['dataset_id'], ['datasets.id'], ondelete='CASCADE'),
         sa.UniqueConstraint('dataset_id', 'name', name='uq_dataset_column'),
     )
-    op.create_index('ix_dataset_columns_dataset_id', 'dataset_columns', ['dataset_id'])
-    op.create_index('idx_columns_dataset_name', 'dataset_columns', ['dataset_id', 'name'])
+        op.create_index('ix_dataset_columns_dataset_id', 'dataset_columns', ['dataset_id'])
+        op.create_index('idx_columns_dataset_name', 'dataset_columns', ['dataset_id', 'name'])
+    # If table exists, do nothing (no-op)
 
 
 def downgrade() -> None:

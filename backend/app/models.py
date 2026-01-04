@@ -17,7 +17,7 @@ from sqlalchemy import (
     TIMESTAMP,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -56,6 +56,8 @@ class Dataset(Base):
     owner_contact = Column(String(255), nullable=True)
     intended_use = Column(Text, nullable=True)
     limitations = Column(Text, nullable=True)
+    location_type = Column(String(50), nullable=True, index=True)  # e.g., 's3', 'databricks', 'snowflake', 'bigquery'
+    location_data = Column(JSONB, nullable=True)  # Type-specific location data as JSON
     last_seen_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
     last_scored_at = Column(TIMESTAMP(timezone=True), nullable=True)
     readiness_score = Column(Integer, nullable=False, default=0, index=True)

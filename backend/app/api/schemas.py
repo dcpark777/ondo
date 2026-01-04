@@ -3,7 +3,7 @@ Pydantic schemas for API request/response validation.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -119,6 +119,8 @@ class DatasetDetailResponse(BaseModel):
     owner_contact: Optional[str] = None
     intended_use: Optional[str] = None
     limitations: Optional[str] = None
+    location_type: Optional[str] = None  # e.g., 's3', 'databricks', 'snowflake', 'bigquery'
+    location_data: Optional[Dict[str, Any]] = None  # Type-specific location data
     last_seen_at: datetime
     last_scored_at: Optional[datetime] = None
     readiness_score: int

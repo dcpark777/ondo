@@ -12,6 +12,8 @@ export interface DatasetListItem {
   readiness_score: number
   readiness_status: string
   last_scored_at: string | null
+  location_type: string | null
+  location_data: Record<string, any> | null
 }
 
 export interface DatasetListResponse {

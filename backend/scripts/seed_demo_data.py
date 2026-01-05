@@ -100,6 +100,13 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["created_at"],
             "sla_hours": 24,
             "producing_job": "user_ingestion_pipeline",
+            "location_type": "snowflake",
+            "location_data": {
+                "database": "ANALYTICS",
+                "schema": "PUBLIC",
+                "table": "USERS",
+                "warehouse": "COMPUTE_WH"
+            },
         },
         {
             "name": "analytics.events",
@@ -126,6 +133,12 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["timestamp", "event_type"],
             "sla_hours": 1,
             "producing_job": "event_streaming_pipeline",
+            "location_type": "databricks",
+            "location_data": {
+                "catalog": "main",
+                "schema": "analytics",
+                "table": "events"
+            },
         },
         {
             "name": "staging.raw_logs",
@@ -147,6 +160,12 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["timestamp"],
             "sla_hours": 1,
             "producing_job": "log_aggregation_job",
+            "location_type": "s3",
+            "location_data": {
+                "bucket": "data-lake-prod",
+                "prefix": "staging/raw_logs",
+                "region": "us-east-1"
+            },
         },
         {
             "name": "analytics.revenue",
@@ -171,6 +190,12 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["date", "region"],
             "sla_hours": 24,
             "producing_job": "revenue_aggregation_daily",
+            "location_type": "bigquery",
+            "location_data": {
+                "project": "analytics-prod",
+                "dataset": "analytics",
+                "table": "revenue"
+            },
         },
         {
             "name": "experiments.ab_test_results",
@@ -189,6 +214,11 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["experiment_id"],
             "sla_hours": 6,
             "producing_job": "ab_test_analysis_pipeline",
+            "location_type": "hive",
+            "location_data": {
+                "database": "experiments",
+                "table": "ab_test_results"
+            },
         },
         {
             "name": "analytics.product_catalog",
@@ -428,6 +458,8 @@ def create_demo_datasets(db: Session, force: bool = False):
             partition_keys=config.get("partition_keys"),
             sla_hours=config.get("sla_hours"),
             producing_job=config.get("producing_job"),
+            location_type=config.get("location_type"),
+            location_data=config.get("location_data"),
             readiness_score=score_result.total_score,
             readiness_status=score_result.status.value,  # Pass value string directly
         )

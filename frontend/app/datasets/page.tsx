@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { listDatasets, DatasetListItem, ListDatasetsParams } from '../api/client'
 
@@ -14,9 +14,11 @@ export default function DatasetsPage() {
   const [error, setError] = useState<string | null>(null)
 
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [ownerFilter, setOwnerFilter] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
   
   // Sort state
   const [sortField, setSortField] = useState<SortField | null>(null)
@@ -29,7 +31,7 @@ export default function DatasetsPage() {
 
     try {
       const params: ListDatasetsParams = {}
-      if (statusFilter) params.status = statusFilter
+      if (statusFilter.length > 0) params.status = statusFilter.join(',')
       if (ownerFilter) params.owner = ownerFilter
       if (searchQuery) params.q = searchQuery
 
@@ -47,6 +49,19 @@ export default function DatasetsPage() {
   useEffect(() => {
     fetchDatasets()
   }, [statusFilter, ownerFilter, searchQuery])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   // Sort datasets
   const sortedDatasets = [...datasets].sort((a, b) => {
@@ -149,6 +164,116 @@ export default function DatasetsPage() {
     }
   }
 
+  const getScoreBarColor = (status: string) => {
+    switch (status) {
+      case 'gold':
+      case 'production_ready':
+        return 'bg-green-500'
+      case 'internal':
+        return 'bg-orange-500'
+      case 'draft':
+        return 'bg-red-500'
+      default:
+        return 'bg-blue-500'
+    }
+  }
+
+  const getLocationIcon = (locationType: string | null) => {
+    if (!locationType) return null
+    
+    const type = locationType.toLowerCase()
+    const iconClass = "w-4 h-4"
+    
+    switch (type) {
+      case 's3':
+        // AWS S3 bucket icon
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.64l-8 4.18-8-4.18V6.18l8-4z"/>
+            <path d="M12 8L6 11v6l6 3 6-3v-6l-6-3zm0 2.18l3.5 1.75v3.14L12 16.82l-3.5-1.75v-3.14L12 10.18z"/>
+          </svg>
+        )
+      case 'snowflake':
+        // Snowflake logo - simplified snowflake pattern
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l-2 2 2 2-2 2 2 2-2 2 2 2v4l-2-2-2 2-2-2-2 2-2-2v-4l2-2-2-2 2-2-2-2 2-2-2-2 2-2h4l-2 2 2-2 2 2 2-2 2 2zm0 2.83L9.17 8 12 10.83 14.83 8 12 4.83z"/>
+            <circle cx="12" cy="12" r="1.5"/>
+          </svg>
+        )
+      case 'databricks':
+        // Databricks Unity Catalog logo - triangle pattern
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0L0 6.93v10.14L12 24l12-6.93V6.93L12 0zm0 2.31l9.23 5.33v8.72L12 21.69l-9.23-5.33V7.64L12 2.31z"/>
+            <path d="M12 4.62L6.31 7.93v8.14L12 19.38l5.69-3.31V7.93L12 4.62zm0 2.31l3.46 2v4.14L12 15.38l-3.46-2.31V9.23L12 6.93z"/>
+          </svg>
+        )
+      case 'bigquery':
+        // Google BigQuery logo - simplified
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            <path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
+          </svg>
+        )
+      case 'hive':
+        // Apache Hive logo - hexagon/beehive pattern
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.83l7.5 3.75v7.5L12 19.17l-7.5-3.75v-7.5L12 4.83z"/>
+            <path d="M12 7.5L8.5 9.5v5L12 16.5l3.5-2v-5L12 7.5zm0 2.25l1.75.875v2.25L12 13.75l-1.75-.875v-2.25L12 9.75z"/>
+          </svg>
+        )
+      default:
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+          </svg>
+        )
+    }
+  }
+
+  const getLocationLabel = (locationType: string | null) => {
+    if (!locationType) return ''
+    
+    const type = locationType.toLowerCase()
+    switch (type) {
+      case 's3':
+        return 'S3'
+      case 'snowflake':
+        return 'Snowflake'
+      case 'databricks':
+        return 'Databricks'
+      case 'bigquery':
+        return 'BigQuery'
+      case 'hive':
+        return 'Hive'
+      default:
+        return type.charAt(0).toUpperCase() + type.slice(1)
+    }
+  }
+
+  const getLocationBadgeColor = (locationType: string | null) => {
+    if (!locationType) return 'bg-gray-100 text-gray-600'
+    
+    const type = locationType.toLowerCase()
+    switch (type) {
+      case 's3':
+        return 'bg-orange-100 text-orange-700'
+      case 'snowflake':
+        return 'bg-blue-100 text-blue-700'
+      case 'databricks':
+        return 'bg-purple-100 text-purple-700'
+      case 'bigquery':
+        return 'bg-yellow-100 text-yellow-700'
+      case 'hive':
+        return 'bg-green-100 text-green-700'
+      default:
+        return 'bg-gray-100 text-gray-600'
+    }
+  }
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never'
     const date = new Date(dateString)
@@ -174,25 +299,69 @@ export default function DatasetsPage() {
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Status Filter */}
-          <div>
-            <label
-              htmlFor="status-filter"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+          <div className="relative" ref={statusDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Status
             </label>
-            <select
-              id="status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            <button
+              type="button"
+              onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
-              <option value="">All Statuses</option>
-              <option value="gold">Gold</option>
-              <option value="production_ready">Production Ready</option>
-              <option value="internal">Internal</option>
-              <option value="draft">Draft</option>
-            </select>
+              <span className="text-sm text-gray-700">
+                {statusFilter.length === 0
+                  ? 'All'
+                  : statusFilter.length === 1
+                  ? getStatusLabel(statusFilter[0])
+                  : `${statusFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${statusDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {statusDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={statusFilter.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setStatusFilter([])
+                        }
+                      }}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {['gold', 'production_ready', 'internal', 'draft'].map((status) => (
+                    <label key={status} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={statusFilter.includes(status)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setStatusFilter([...statusFilter, status])
+                          } else {
+                            setStatusFilter(statusFilter.filter(s => s !== status))
+                          }
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        {status === 'production_ready' ? 'Production Ready' : status.charAt(0).toUpperCase() + status.slice(1)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Owner Filter */}
@@ -325,6 +494,14 @@ export default function DatasetsPage() {
                               {dataset.display_name}
                             </div>
                             <div className="text-sm text-gray-500">{dataset.full_name}</div>
+                            {dataset.location_type && (
+                              <div className="mt-1">
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${getLocationBadgeColor(dataset.location_type)}`}>
+                                  {getLocationIcon(dataset.location_type)}
+                                  <span>{getLocationLabel(dataset.location_type)}</span>
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </Link>
                       </td>
@@ -335,7 +512,7 @@ export default function DatasetsPage() {
                           </div>
                           <div className="ml-2 w-24 bg-gray-200 rounded-full h-2">
                             <div
-                              className="bg-blue-600 h-2 rounded-full"
+                              className={`${getScoreBarColor(dataset.readiness_status)} h-2 rounded-full`}
                               style={{ width: `${dataset.readiness_score}%` }}
                             ></div>
                           </div>

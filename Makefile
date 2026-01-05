@@ -1,4 +1,4 @@
-.PHONY: up down build logs clean seed help
+.PHONY: build start full stop clean restart logs seed help
 
 # Detect container runtime: use podman if available, otherwise docker
 CONTAINER_RUNTIME := $(shell command -v podman >/dev/null 2>&1 && echo podman || echo docker)
@@ -12,17 +12,34 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-up: ## Start all services (demo data seeds automatically on first startup)
+build: ## Build all container images
+	$(COMPOSE_CMD) build
+
+start: ## Start containers using latest images
 	$(COMPOSE_CMD) up -d
 	@echo "Services starting... Wait ~30 seconds for startup"
 	@echo "Demo data will be seeded automatically if database is empty"
 	@echo "Using container runtime: $(CONTAINER_RUNTIME)"
 
-down: ## Stop all services
+full: ## Build images and start containers
+	$(COMPOSE_CMD) up -d --build
+	@echo "Services starting... Wait ~30 seconds for startup"
+	@echo "Demo data will be seeded automatically if database is empty"
+	@echo "Using container runtime: $(CONTAINER_RUNTIME)"
+
+stop: ## Stop containers
 	$(COMPOSE_CMD) down
 
-build: ## Build all container images
+clean: ## Clean containers and images
+	$(COMPOSE_CMD) down -v
+	$(COMPOSE_CMD) rm -f
+
+restart: ## Stop containers, build images, and start with new images
+	$(COMPOSE_CMD) down
 	$(COMPOSE_CMD) build
+	$(COMPOSE_CMD) up -d
+	@echo "Services restarted with new images... Wait ~30 seconds for startup"
+	@echo "Using container runtime: $(CONTAINER_RUNTIME)"
 
 logs: ## View logs from all services
 	$(COMPOSE_CMD) logs -f
@@ -36,7 +53,7 @@ logs-frontend: ## View frontend logs
 logs-db: ## View database logs
 	$(COMPOSE_CMD) logs -f db
 
-seed: ## Seed demo data (run after 'make up', or use 'make seed-force' to re-seed)
+seed: ## Seed demo data (run after 'make start', or use 'make seed-force' to re-seed)
 	@echo "Seeding demo data..."
 	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py
 	@echo "Demo data seeded! Visit http://localhost:3000/datasets"
@@ -46,18 +63,8 @@ seed-force: ## Force re-seed demo data (clears existing data)
 	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py --force
 	@echo "Demo data re-seeded! Visit http://localhost:3000/datasets"
 
-restart: ## Restart all services
-	$(COMPOSE_CMD) restart
-
-clean: ## Stop and remove all containers, volumes, and images
-	$(COMPOSE_CMD) down -v
-	$(COMPOSE_CMD) rm -f
-
 dev: ## Start in development mode with hot-reload
 	$(COMPOSE_CMD) -f docker-compose.yml -f docker-compose.dev.yml up
-
-rebuild: ## Rebuild and restart all services
-	$(COMPOSE_CMD) up -d --build
 
 ps: ## Show running containers
 	$(COMPOSE_CMD) ps

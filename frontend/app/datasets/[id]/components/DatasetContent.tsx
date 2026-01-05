@@ -161,6 +161,105 @@ export default function DatasetContent(props: DatasetContentProps) {
     return `Every ${hours} hours`
   }
 
+  // Helper function to get location icon
+  const getLocationIcon = (locationType: string | null) => {
+    if (!locationType) return null
+    
+    const type = locationType.toLowerCase()
+    const iconClass = "w-4 h-4"
+    
+    switch (type) {
+      case 's3':
+        // AWS S3 bucket icon
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.64l-8 4.18-8-4.18V6.18l8-4z"/>
+            <path d="M12 8L6 11v6l6 3 6-3v-6l-6-3zm0 2.18l3.5 1.75v3.14L12 16.82l-3.5-1.75v-3.14L12 10.18z"/>
+          </svg>
+        )
+      case 'snowflake':
+        // Snowflake logo - simplified snowflake pattern
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l-2 2 2 2-2 2 2 2-2 2 2 2v4l-2-2-2 2-2-2-2 2-2-2v-4l2-2-2-2 2-2-2-2 2-2-2-2 2-2h4l-2 2 2-2 2 2 2-2 2 2zm0 2.83L9.17 8 12 10.83 14.83 8 12 4.83z"/>
+            <circle cx="12" cy="12" r="1.5"/>
+          </svg>
+        )
+      case 'databricks':
+        // Databricks Unity Catalog logo - triangle pattern
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0L0 6.93v10.14L12 24l12-6.93V6.93L12 0zm0 2.31l9.23 5.33v8.72L12 21.69l-9.23-5.33V7.64L12 2.31z"/>
+            <path d="M12 4.62L6.31 7.93v8.14L12 19.38l5.69-3.31V7.93L12 4.62zm0 2.31l3.46 2v4.14L12 15.38l-3.46-2.31V9.23L12 6.93z"/>
+          </svg>
+        )
+      case 'bigquery':
+        // Google BigQuery logo - simplified
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            <path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
+          </svg>
+        )
+      case 'hive':
+        // Apache Hive logo - hexagon/beehive pattern
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.83l7.5 3.75v7.5L12 19.17l-7.5-3.75v-7.5L12 4.83z"/>
+            <path d="M12 7.5L8.5 9.5v5L12 16.5l3.5-2v-5L12 7.5zm0 2.25l1.75.875v2.25L12 13.75l-1.75-.875v-2.25L12 9.75z"/>
+          </svg>
+        )
+      default:
+        return (
+          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+          </svg>
+        )
+    }
+  }
+
+  // Helper function to get location label
+  const getLocationLabel = (locationType: string | null) => {
+    if (!locationType) return ''
+    
+    const type = locationType.toLowerCase()
+    switch (type) {
+      case 's3':
+        return 'S3'
+      case 'snowflake':
+        return 'Snowflake'
+      case 'databricks':
+        return 'Databricks'
+      case 'bigquery':
+        return 'BigQuery'
+      case 'hive':
+        return 'Hive'
+      default:
+        return type.charAt(0).toUpperCase() + type.slice(1)
+    }
+  }
+
+  // Helper function to get location badge color
+  const getLocationBadgeColor = (locationType: string | null) => {
+    if (!locationType) return 'bg-gray-100 text-gray-600 border-gray-200'
+    
+    const type = locationType.toLowerCase()
+    switch (type) {
+      case 's3':
+        return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'snowflake':
+        return 'bg-blue-100 text-blue-700 border-blue-200'
+      case 'databricks':
+        return 'bg-purple-100 text-purple-700 border-purple-200'
+      case 'bigquery':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200'
+      case 'hive':
+        return 'bg-green-100 text-green-700 border-green-200'
+      default:
+        return 'bg-gray-100 text-gray-600 border-gray-200'
+    }
+  }
+
   // Helper function to format location information
   const formatLocation = () => {
     if (!dataset.location_type || !dataset.location_data) {
@@ -230,6 +329,18 @@ export default function DatasetContent(props: DatasetContentProps) {
             { label: 'Table', value: data.table },
           ].filter(item => item.value),
         }
+      case 'hive':
+        return {
+          label: 'Hive',
+          display: [
+            data.database,
+            data.table,
+          ].filter(Boolean).join('.') || 'Hive Location',
+          details: [
+            { label: 'Database', value: data.database },
+            { label: 'Table', value: data.table },
+          ].filter(item => item.value),
+        }
       default:
         return {
           label: type.charAt(0).toUpperCase() + type.slice(1),
@@ -263,9 +374,15 @@ export default function DatasetContent(props: DatasetContentProps) {
             </h1>
             <p className="text-gray-600">{dataset.full_name}</p>
             {locationInfo && (
-              <p className="text-sm text-gray-500 mt-1 font-mono">
-                {locationInfo.display}
-              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${getLocationBadgeColor(dataset.location_type)}`}>
+                  {getLocationIcon(dataset.location_type)}
+                  <span>{getLocationLabel(dataset.location_type)}</span>
+                </span>
+                <span className="text-sm text-gray-500 font-mono">
+                  {locationInfo.display}
+                </span>
+              </div>
             )}
           </div>
           <div className="text-right">
@@ -317,42 +434,42 @@ export default function DatasetContent(props: DatasetContentProps) {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Quick Stats */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Stats</h2>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Readiness Score</p>
-                    <p className="text-3xl font-bold text-gray-900">{dataset.readiness_score}/100</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Status</p>
-                    <span
-                      className={'inline-flex px-3 py-1 text-sm font-semibold rounded-full ' + getStatusBadgeClass(
-                        dataset.readiness_status
-                      )}
-                    >
-                      {getStatusLabel(dataset.readiness_status)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Columns</p>
-                    <p className="text-sm text-gray-900">{dataset.columns.length} columns</p>
-                  </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Quick Stats */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Stats</h2>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-500">Readiness Score</p>
+                  <p className="text-3xl font-bold text-gray-900">{dataset.readiness_score}/100</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <span
+                    className={'inline-flex px-3 py-1 text-sm font-semibold rounded-full ' + getStatusBadgeClass(
+                      dataset.readiness_status
+                    )}
+                  >
+                    {getStatusLabel(dataset.readiness_status)}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Columns</p>
+                  <p className="text-sm text-gray-900">{dataset.columns.length} columns</p>
                 </div>
               </div>
+            </div>
 
               {/* Location */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Location</h2>
                 {locationInfo ? (
                   <div className="space-y-3">
-                    <div>
+                <div>
                       <p className="text-sm text-gray-500">Type</p>
                       <p className="text-sm font-medium text-gray-900 mt-1">{locationInfo.label}</p>
-                    </div>
-                    <div>
+                </div>
+                  <div>
                       <p className="text-sm text-gray-500">Path</p>
                       <p className="text-sm font-mono text-gray-900 mt-1 break-all">{locationInfo.display}</p>
                     </div>
@@ -367,7 +484,7 @@ export default function DatasetContent(props: DatasetContentProps) {
                             </div>
                           ))}
                         </div>
-                      </div>
+                  </div>
                     )}
                   </div>
                 ) : (
@@ -379,29 +496,29 @@ export default function DatasetContent(props: DatasetContentProps) {
             {/* Dataset Metadata */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Dataset Size & Files */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Dataset Size</h2>
-                <div className="space-y-3">
-                  <div>
+              <div className="space-y-3">
+                <div>
                     <p className="text-sm text-gray-500">Data Size</p>
                     <p className="text-sm font-medium text-gray-900 mt-1">
                       {formatDataSize(dataset.data_size_bytes)}
-                    </p>
-                  </div>
+                  </p>
+                </div>
                   {dataset.file_count !== null && (
-                    <div>
+                <div>
                       <p className="text-sm text-gray-500">Number of Files</p>
                       <p className="text-sm font-medium text-gray-900 mt-1">
                         {dataset.file_count.toLocaleString()} {dataset.file_count === 1 ? 'file' : 'files'}
-                      </p>
-                    </div>
-                  )}
+                  </p>
                 </div>
+                  )}
               </div>
+            </div>
 
               {/* Partition Keys */}
               {dataset.partition_keys && dataset.partition_keys.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">Partition Keys</h2>
                   <div className="flex flex-wrap gap-2">
                     {dataset.partition_keys.map((key, idx) => (
@@ -410,10 +527,10 @@ export default function DatasetContent(props: DatasetContentProps) {
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
                       >
                         {key}
-                      </span>
+                          </span>
                     ))}
-                  </div>
-                </div>
+                    </div>
+                      </div>
               )}
             </div>
 
@@ -435,14 +552,14 @@ export default function DatasetContent(props: DatasetContentProps) {
                             minute: '2-digit',
                           })
                         : 'Not available'}
-                    </p>
-                  </div>
+                          </p>
+                        </div>
                   <div>
                     <p className="text-sm text-gray-500">SLA</p>
                     <p className="text-sm font-medium text-gray-900 mt-1">
                       {formatSLA(dataset.sla_hours)}
                     </p>
-                  </div>
+                      </div>
                 </div>
               </div>
 
@@ -454,9 +571,9 @@ export default function DatasetContent(props: DatasetContentProps) {
                   <p className="text-sm font-medium text-gray-900 mt-1 font-mono">
                     {dataset.producing_job || <span className="text-gray-400 italic">Not specified</span>}
                   </p>
+                          </div>
+                        </div>
                 </div>
-              </div>
-            </div>
 
             {/* Description Section */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -1013,7 +1130,7 @@ export default function DatasetContent(props: DatasetContentProps) {
         {/* Schema Tab */}
         {activeTab === 'schema' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Data Schema</h2>
                 {dataset.columns && dataset.columns.length > 0 && (
@@ -1079,7 +1196,7 @@ export default function DatasetContent(props: DatasetContentProps) {
                   </div>
                 )}
               </div>
-              {dataset.columns && dataset.columns.length > 0 ? (
+            {dataset.columns && dataset.columns.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -1203,7 +1320,7 @@ export default function DatasetContent(props: DatasetContentProps) {
                 </p>
               </div>
             )}
-            </div>
+          </div>
 
             {/* Generated Schema Display */}
             {generatedSchema && (
@@ -1325,7 +1442,7 @@ export default function DatasetContent(props: DatasetContentProps) {
         {activeTab === 'lineage' && (
           <div className="space-y-6">
             {/* Dataset Lineage Graph */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-6">Dataset Lineage</h2>
               
               {loadingLineage ? (
@@ -1363,7 +1480,7 @@ export default function DatasetContent(props: DatasetContentProps) {
                                     <div className="mt-2">
                                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                                         {item.transformation_type}
-                                      </span>
+                  </span>
                                     </div>
                                   )}
                                 </Link>
@@ -1421,8 +1538,8 @@ export default function DatasetContent(props: DatasetContentProps) {
                                     <div className="mt-2">
                                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                                         {item.transformation_type}
-                                      </span>
-                                    </div>
+                  </span>
+                </div>
                                   )}
                                 </Link>
                               </div>
@@ -1450,12 +1567,12 @@ export default function DatasetContent(props: DatasetContentProps) {
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
+            ) : (
+              <div className="text-center py-8 text-gray-500">
                   <p className="text-sm">No lineage information available</p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
             {/* Column Lineage */}
             {dataset.columns && dataset.columns.length > 0 && (

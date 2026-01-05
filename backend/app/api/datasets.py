@@ -126,7 +126,7 @@ def _score_history_to_response(history: DatasetScoreHistory) -> ScoreHistoryResp
 
 @router.get("", response_model=DatasetListResponse)
 def list_datasets(
-    status: Optional[str] = Query(None, description="Filter by readiness status"),
+    status: Optional[str] = Query(None, description="Filter by readiness status (comma-separated for multiple)"),
     owner: Optional[str] = Query(None, description="Filter by owner name"),
     q: Optional[str] = Query(None, description="Search in full_name and display_name"),
     db: Session = Depends(get_db),
@@ -135,22 +135,23 @@ def list_datasets(
     List datasets with optional filtering.
 
     Query parameters:
-    - status: Filter by readiness status (draft, internal, production_ready, gold)
+    - status: Filter by readiness status (comma-separated: draft, internal, production_ready, gold)
     - owner: Filter by owner name
     - q: Search query for full_name and display_name
     """
     query = db.query(Dataset)
 
-    # Filter by status
+    # Filter by status (supports multiple comma-separated values)
     if status:
-        status_value = status.lower()
         valid_statuses = ["draft", "internal", "production_ready", "gold"]
-        if status_value not in valid_statuses:
+        status_list = [s.strip().lower() for s in status.split(",")]
+        invalid_statuses = [s for s in status_list if s not in valid_statuses]
+        if invalid_statuses:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid status: {status}. Must be one of: {', '.join(valid_statuses)}",
+                detail=f"Invalid status(es): {', '.join(invalid_statuses)}. Must be one of: {', '.join(valid_statuses)}",
             )
-        query = query.filter(Dataset.readiness_status == status_value)
+        query = query.filter(Dataset.readiness_status.in_(status_list))
 
     # Filter by owner
     if owner:
@@ -180,6 +181,8 @@ def list_datasets(
             readiness_score=ds.readiness_score,
             readiness_status=ds.readiness_status.value if isinstance(ds.readiness_status, ReadinessStatusEnum) else str(ds.readiness_status),
             last_scored_at=ds.last_scored_at,
+            location_type=ds.location_type,
+            location_data=ds.location_data,
         )
         for ds in datasets
     ]

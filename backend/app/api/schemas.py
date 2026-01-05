@@ -95,6 +95,8 @@ class DatasetListItem(BaseModel):
     readiness_score: int
     readiness_status: str
     last_scored_at: Optional[datetime] = None
+    location_type: Optional[str] = None
+    location_data: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

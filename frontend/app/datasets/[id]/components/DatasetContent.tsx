@@ -116,6 +116,28 @@ export default function DatasetContent(props: DatasetContentProps) {
     }
   }, [activeTab, dataset.id, datasetLineage, loadingLineage])
 
+  // Load column lineage for all columns when lineage tab is active
+  useEffect(() => {
+    if (activeTab === 'lineage' && dataset.columns && dataset.columns.length > 0) {
+      dataset.columns.forEach((column) => {
+        if (!columnLineageMap[column.id] && !loadingColumnLineage[column.id]) {
+          setLoadingColumnLineage(prev => ({ ...prev, [column.id]: true }))
+          getColumnLineage(dataset.id, column.id)
+            .then((lineage) => {
+              setColumnLineageMap(prev => ({ ...prev, [column.id]: lineage }))
+            })
+            .catch(err => {
+              console.error(`Failed to load column lineage for ${column.name}:`, err)
+              setColumnLineageMap(prev => ({ ...prev, [column.id]: { upstream: [], downstream: [] } }))
+            })
+            .finally(() => {
+              setLoadingColumnLineage(prev => ({ ...prev, [column.id]: false }))
+            })
+        }
+      })
+    }
+  }, [activeTab, dataset.id, dataset.columns, columnLineageMap, loadingColumnLineage])
+
   // Helper function to format location information
   const formatLocation = () => {
     if (!dataset.location_type || !dataset.location_data) {
@@ -1329,6 +1351,133 @@ export default function DatasetContent(props: DatasetContentProps) {
                 </div>
               )}
             </div>
+
+            {/* Column Lineage */}
+            {dataset.columns && dataset.columns.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6">Column Lineage</h2>
+                
+                <div className="space-y-6">
+                  {dataset.columns.map((column) => {
+                    const columnLineage = columnLineageMap[column.id]
+                    const isLoading = loadingColumnLineage[column.id]
+                    const hasLineage = columnLineage && (columnLineage.upstream.length > 0 || columnLineage.downstream.length > 0)
+                    
+                    if (!hasLineage && !isLoading) {
+                      return null // Skip columns without lineage
+                    }
+
+                    return (
+                      <div key={column.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="mb-4">
+                          <h3 className="text-lg font-medium text-gray-900">{column.name}</h3>
+                          {column.type && (
+                            <p className="text-sm text-gray-500 mt-1">{column.type}</p>
+                          )}
+                        </div>
+
+                        {isLoading ? (
+                          <div className="text-center py-4">
+                            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                            <p className="mt-2 text-sm text-gray-600">Loading lineage...</p>
+                          </div>
+                        ) : columnLineage ? (
+                          <div className="space-y-4">
+                            {/* Upstream Columns */}
+                            {columnLineage.upstream.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-3">From Columns</h4>
+                                <div className="space-y-2">
+                                  {columnLineage.upstream.map((item) => (
+                                    <div key={item.id} className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center space-x-2">
+                                            <span className="text-sm font-medium text-blue-700">
+                                              {item.upstream_column_name}
+                                            </span>
+                                            <span className="text-xs text-gray-500">from</span>
+                                            <Link 
+                                              href={`/datasets/${item.upstream_dataset_id}`}
+                                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                            >
+                                              {item.upstream_dataset_name}
+                                            </Link>
+                                          </div>
+                                          {item.transformation_expression && (
+                                            <div className="mt-2 text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded border border-gray-200">
+                                              {item.transformation_expression}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="ml-2">
+                                          <span className="text-xs text-blue-600">→</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Downstream Columns */}
+                            {columnLineage.downstream.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-3">To Columns</h4>
+                                <div className="space-y-2">
+                                  {columnLineage.downstream.map((item) => (
+                                    <div key={item.id} className="bg-green-50 border border-green-200 rounded-md p-3">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center space-x-2">
+                                            <span className="text-xs text-green-600">→</span>
+                                            <span className="text-sm font-medium text-green-700">
+                                              {item.downstream_column_name}
+                                            </span>
+                                            <span className="text-xs text-gray-500">in</span>
+                                            <Link 
+                                              href={`/datasets/${item.downstream_dataset_id}`}
+                                              className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                            >
+                                              {item.downstream_dataset_name}
+                                            </Link>
+                                          </div>
+                                          {item.transformation_expression && (
+                                            <div className="mt-2 text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded border border-gray-200">
+                                              {item.transformation_expression}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {columnLineage.upstream.length === 0 && columnLineage.downstream.length === 0 && (
+                              <div className="text-center py-4 text-gray-400 text-sm">
+                                No lineage information for this column
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+
+                  {/* Show message if no columns have lineage */}
+                  {dataset.columns.every(col => {
+                    const lineage = columnLineageMap[col.id]
+                    return !lineage || (lineage.upstream.length === 0 && lineage.downstream.length === 0)
+                  }) && !dataset.columns.some(col => loadingColumnLineage[col.id]) && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No column-level lineage information available</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

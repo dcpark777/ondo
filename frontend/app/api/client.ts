@@ -421,8 +421,10 @@ export interface ColumnLineageItem {
   upstream_column_id: string
   downstream_column_id: string
   upstream_column_name: string
+  upstream_dataset_id: string
   upstream_dataset_name: string
   downstream_column_name: string
+  downstream_dataset_id: string
   downstream_dataset_name: string
   transformation_expression: string | null
   created_at: string

@@ -178,8 +178,10 @@ class ColumnLineageItem(BaseModel):
     upstream_column_id: UUID
     downstream_column_id: UUID
     upstream_column_name: str
+    upstream_dataset_id: UUID
     upstream_dataset_name: str
     downstream_column_name: str
+    downstream_dataset_id: UUID
     downstream_dataset_name: str
     transformation_expression: Optional[str] = None
     created_at: datetime

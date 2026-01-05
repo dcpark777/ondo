@@ -60,6 +60,12 @@ class Dataset(Base):
     location_data = Column(JSONB, nullable=True)  # Type-specific location data as JSON
     last_seen_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
     last_scored_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_updated_at = Column(TIMESTAMP(timezone=True), nullable=True)  # When dataset was last updated/modified
+    data_size_bytes = Column(Integer, nullable=True)  # Dataset size in bytes
+    file_count = Column(Integer, nullable=True)  # Number of files (if applicable)
+    partition_keys = Column(JSONB, nullable=True)  # Array of partition key column names
+    sla_hours = Column(Integer, nullable=True)  # SLA in hours (e.g., 24 for daily, 1 for hourly)
+    producing_job = Column(String(255), nullable=True)  # Job/pipeline that produces this dataset
     readiness_score = Column(Integer, nullable=False, default=0, index=True)
     readiness_status = Column(
         String(50),  # Store as string, validate in application code

@@ -138,6 +138,29 @@ export default function DatasetContent(props: DatasetContentProps) {
     }
   }, [activeTab, dataset.id, dataset.columns, columnLineageMap, loadingColumnLineage])
 
+  // Helper function to format data size
+  const formatDataSize = (bytes: number | null): string => {
+    if (!bytes) return 'Unknown'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    let size = bytes
+    let unitIndex = 0
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024
+      unitIndex++
+    }
+    return `${size.toFixed(2)} ${units[unitIndex]}`
+  }
+
+  // Helper function to format SLA
+  const formatSLA = (hours: number | null): string => {
+    if (!hours) return 'Not specified'
+    if (hours === 1) return 'Hourly'
+    if (hours === 24) return 'Daily'
+    if (hours === 168) return 'Weekly' // 7 * 24
+    if (hours === 720) return 'Monthly' // 30 * 24
+    return `Every ${hours} hours`
+  }
+
   // Helper function to format location information
   const formatLocation = () => {
     if (!dataset.location_type || !dataset.location_data) {
@@ -350,6 +373,88 @@ export default function DatasetContent(props: DatasetContentProps) {
                 ) : (
                   <p className="text-sm text-gray-400 italic">No location information available</p>
                 )}
+              </div>
+            </div>
+
+            {/* Dataset Metadata */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Dataset Size & Files */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Dataset Size</h2>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Data Size</p>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {formatDataSize(dataset.data_size_bytes)}
+                    </p>
+                  </div>
+                  {dataset.file_count !== null && (
+                    <div>
+                      <p className="text-sm text-gray-500">Number of Files</p>
+                      <p className="text-sm font-medium text-gray-900 mt-1">
+                        {dataset.file_count.toLocaleString()} {dataset.file_count === 1 ? 'file' : 'files'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Partition Keys */}
+              {dataset.partition_keys && dataset.partition_keys.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Partition Keys</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {dataset.partition_keys.map((key, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
+                      >
+                        {key}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Operational Metadata */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Last Updated & SLA */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Update Information</h2>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Last Updated</p>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {dataset.last_updated_at
+                        ? new Date(dataset.last_updated_at).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'Not available'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">SLA</p>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {formatSLA(dataset.sla_hours)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Producing Job */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Producing Job</h2>
+                <div>
+                  <p className="text-sm text-gray-500">Job/Pipeline</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1 font-mono">
+                    {dataset.producing_job || <span className="text-gray-400 italic">Not specified</span>}
+                  </p>
+                </div>
               </div>
             </div>
 

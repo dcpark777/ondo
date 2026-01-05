@@ -78,6 +78,12 @@ export interface DatasetDetail {
   location_data: Record<string, any> | null
   last_seen_at: string
   last_scored_at: string | null
+  last_updated_at: string | null
+  data_size_bytes: number | null
+  file_count: number | null
+  partition_keys: string[] | null
+  sla_hours: number | null
+  producing_job: string | null
   readiness_score: number
   readiness_status: string
   dimension_scores: DimensionScore[]

@@ -123,6 +123,12 @@ class DatasetDetailResponse(BaseModel):
     location_data: Optional[Dict[str, Any]] = None  # Type-specific location data
     last_seen_at: datetime
     last_scored_at: Optional[datetime] = None
+    last_updated_at: Optional[datetime] = None  # When dataset was last updated/modified
+    data_size_bytes: Optional[int] = None  # Dataset size in bytes
+    file_count: Optional[int] = None  # Number of files (if applicable)
+    partition_keys: Optional[List[str]] = None  # Array of partition key column names
+    sla_hours: Optional[int] = None  # SLA in hours (e.g., 24 for daily, 1 for hourly)
+    producing_job: Optional[str] = None  # Job/pipeline that produces this dataset
     readiness_score: int
     readiness_status: str
     dimension_scores: List[DimensionScoreResponse]

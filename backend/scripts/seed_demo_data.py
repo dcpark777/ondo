@@ -5,6 +5,7 @@ Creates sample datasets with varied scores for demonstration purposes.
 """
 
 import sys
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -94,6 +95,11 @@ def create_demo_datasets(db: Session, force: bool = False):
             "has_release_notes": True,
             "has_versioning": True,
             "backward_compatible": True,
+            "data_size_bytes": 1073741824,  # 1 GB
+            "file_count": 12,
+            "partition_keys": ["created_at"],
+            "sla_hours": 24,
+            "producing_job": "user_ingestion_pipeline",
         },
         {
             "name": "analytics.events",
@@ -115,6 +121,11 @@ def create_demo_datasets(db: Session, force: bool = False):
             "has_sla": False,
             "breaking_changes_30d": 1,
             "has_release_notes": False,
+            "data_size_bytes": 5368709120,  # 5 GB
+            "file_count": 365,
+            "partition_keys": ["timestamp", "event_type"],
+            "sla_hours": 1,
+            "producing_job": "event_streaming_pipeline",
         },
         {
             "name": "staging.raw_logs",
@@ -131,6 +142,11 @@ def create_demo_datasets(db: Session, force: bool = False):
             ],
             "has_freshness_checks": False,
             "has_volume_checks": False,
+            "data_size_bytes": 2147483648,  # 2 GB
+            "file_count": 720,
+            "partition_keys": ["timestamp"],
+            "sla_hours": 1,
+            "producing_job": "log_aggregation_job",
         },
         {
             "name": "analytics.revenue",
@@ -150,6 +166,11 @@ def create_demo_datasets(db: Session, force: bool = False):
             "has_sla": True,
             "breaking_changes_30d": 0,
             "has_release_notes": True,
+            "data_size_bytes": 52428800,  # 50 MB
+            "file_count": 365,
+            "partition_keys": ["date", "region"],
+            "sla_hours": 24,
+            "producing_job": "revenue_aggregation_daily",
         },
         {
             "name": "experiments.ab_test_results",
@@ -163,6 +184,11 @@ def create_demo_datasets(db: Session, force: bool = False):
                 {"name": "metric_value", "type": "numeric", "description": "Metric value for the experiment", "nullable": True},
             ],
             "has_freshness_checks": False,
+            "data_size_bytes": 10485760,  # 10 MB
+            "file_count": 30,
+            "partition_keys": ["experiment_id"],
+            "sla_hours": 6,
+            "producing_job": "ab_test_analysis_pipeline",
         },
     ]
 
@@ -191,6 +217,11 @@ def create_demo_datasets(db: Session, force: bool = False):
         score_result = score_dataset(metadata)
 
         # Create dataset record
+        # Generate a random last_updated_at within the last 7 days
+        days_ago = random.randint(0, 7)
+        hours_ago = random.randint(0, 23)
+        last_updated = datetime.utcnow() - timedelta(days=days_ago, hours=hours_ago)
+        
         dataset = Dataset(
             full_name=config["name"],
             display_name=config["display_name"],
@@ -201,6 +232,12 @@ def create_demo_datasets(db: Session, force: bool = False):
             limitations=config.get("limitations"),
             last_seen_at=datetime.utcnow(),
             last_scored_at=datetime.utcnow(),
+            last_updated_at=last_updated,
+            data_size_bytes=config.get("data_size_bytes"),
+            file_count=config.get("file_count"),
+            partition_keys=config.get("partition_keys"),
+            sla_hours=config.get("sla_hours"),
+            producing_job=config.get("producing_job"),
             readiness_score=score_result.total_score,
             readiness_status=score_result.status.value,  # Pass value string directly
         )

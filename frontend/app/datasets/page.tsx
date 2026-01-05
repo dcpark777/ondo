@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { listDatasets, DatasetListItem, ListDatasetsParams } from '../api/client'
 
+type SortField = 'dataset' | 'score' | 'status' | 'owner' | 'last_scored'
+type SortDirection = 'asc' | 'desc'
+
 export default function DatasetsPage() {
   const [datasets, setDatasets] = useState<DatasetListItem[]>([])
   const [total, setTotal] = useState(0)
@@ -14,6 +17,10 @@ export default function DatasetsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [ownerFilter, setOwnerFilter] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState<string>('')
+  
+  // Sort state
+  const [sortField, setSortField] = useState<SortField | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   // Fetch datasets
   const fetchDatasets = async () => {
@@ -40,6 +47,77 @@ export default function DatasetsPage() {
   useEffect(() => {
     fetchDatasets()
   }, [statusFilter, ownerFilter, searchQuery])
+
+  // Sort datasets
+  const sortedDatasets = [...datasets].sort((a, b) => {
+    if (!sortField) return 0
+    
+    let aValue: string | number
+    let bValue: string | number
+    
+    switch (sortField) {
+      case 'dataset':
+        aValue = a.display_name || a.full_name
+        bValue = b.display_name || b.full_name
+        break
+      case 'score':
+        aValue = a.readiness_score
+        bValue = b.readiness_score
+        break
+      case 'status':
+        aValue = a.readiness_status
+        bValue = b.readiness_status
+        break
+      case 'owner':
+        aValue = a.owner_name || ''
+        bValue = b.owner_name || ''
+        break
+      case 'last_scored':
+        aValue = a.last_scored_at ? new Date(a.last_scored_at).getTime() : 0
+        bValue = b.last_scored_at ? new Date(b.last_scored_at).getTime() : 0
+        break
+      default:
+        return 0
+    }
+    
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return (
+        <span className="ml-1 text-gray-400">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+        </span>
+      )
+    }
+    return (
+      <span className="ml-1 text-blue-600">
+        {sortDirection === 'asc' ? (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </span>
+    )
+  }
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -177,32 +255,62 @@ export default function DatasetsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dataset
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('dataset')}
+                  >
+                    <div className="flex items-center">
+                      Dataset
+                      {getSortIcon('dataset')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Score
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('score')}
+                  >
+                    <div className="flex items-center">
+                      Score
+                      {getSortIcon('score')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center">
+                      Status
+                      {getSortIcon('status')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Owner
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('owner')}
+                  >
+                    <div className="flex items-center">
+                      Owner
+                      {getSortIcon('owner')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Scored
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('last_scored')}
+                  >
+                    <div className="flex items-center">
+                      Last Scored
+                      {getSortIcon('last_scored')}
+                    </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {datasets.length === 0 ? (
+                {sortedDatasets.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                       No datasets found
                     </td>
                   </tr>
                 ) : (
-                  datasets.map((dataset) => (
+                  sortedDatasets.map((dataset) => (
                     <tr
                       key={dataset.id}
                       className="hover:bg-gray-50"

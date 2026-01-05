@@ -270,14 +270,6 @@ export default function DatasetContent(props: DatasetContentProps) {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Last Scored</p>
-                  <p className="text-sm text-gray-900">
-                    {dataset.last_scored_at
-                      ? new Date(dataset.last_scored_at).toLocaleDateString()
-                      : 'Never'}
-                  </p>
-                </div>
-                <div>
                   <p className="text-sm text-gray-500">Columns</p>
                   <p className="text-sm text-gray-900">{dataset.columns.length} columns</p>
                 </div>
@@ -369,6 +361,26 @@ export default function DatasetContent(props: DatasetContentProps) {
         {/* Score Analysis Tab */}
         {activeTab === 'score' && (
           <div className="space-y-6">
+            {/* Last Scored Info */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-1">Last Scored</h2>
+                  <p className="text-sm text-gray-500">
+                    {dataset.last_scored_at
+                      ? new Date(dataset.last_scored_at).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Never'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Dimension Breakdown */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">

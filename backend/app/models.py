@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    BigInteger,
     String,
     Text,
     TIMESTAMP,
@@ -61,7 +62,7 @@ class Dataset(Base):
     last_seen_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
     last_scored_at = Column(TIMESTAMP(timezone=True), nullable=True)
     last_updated_at = Column(TIMESTAMP(timezone=True), nullable=True)  # When dataset was last updated/modified
-    data_size_bytes = Column(Integer, nullable=True)  # Dataset size in bytes
+    data_size_bytes = Column(BigInteger, nullable=True)  # Dataset size in bytes
     file_count = Column(Integer, nullable=True)  # Number of files (if applicable)
     partition_keys = Column(JSONB, nullable=True)  # Array of partition key column names
     sla_hours = Column(Integer, nullable=True)  # SLA in hours (e.g., 24 for daily, 1 for hourly)

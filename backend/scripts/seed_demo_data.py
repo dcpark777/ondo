@@ -190,6 +190,196 @@ def create_demo_datasets(db: Session, force: bool = False):
             "sla_hours": 6,
             "producing_job": "ab_test_analysis_pipeline",
         },
+        {
+            "name": "analytics.product_catalog",
+            "display_name": "Product Catalog",
+            "owner_name": "Product Team",
+            "owner_contact": "product-data@example.com",
+            "description": "Complete product catalog with pricing and inventory information",
+            "intended_use": "Product analytics, inventory management, pricing analysis",
+            "limitations": "Pricing updates may lag by up to 15 minutes",
+            "columns": [
+                {"name": "product_id", "type": "uuid", "description": "Unique product identifier", "nullable": False},
+                {"name": "product_name", "type": "varchar(255)", "description": "Product name", "nullable": False},
+                {"name": "category", "type": "varchar(100)", "description": "Product category", "nullable": False},
+                {"name": "price", "type": "decimal(10,2)", "description": "Product price in USD", "nullable": False},
+                {"name": "in_stock", "type": "boolean", "description": "Whether product is in stock", "nullable": False},
+                {"name": "created_at", "type": "timestamp", "description": "Product creation date", "nullable": False},
+            ],
+            "has_freshness_checks": True,
+            "has_volume_checks": True,
+            "dbt_test_count": 5,
+            "has_sla": True,
+            "breaking_changes_30d": 0,
+            "has_release_notes": True,
+            "data_size_bytes": 268435456,  # 256 MB
+            "file_count": 1,
+            "partition_keys": ["category"],
+            "sla_hours": 6,
+            "producing_job": "product_catalog_sync",
+        },
+        {
+            "name": "ml.feature_store",
+            "display_name": "ML Feature Store",
+            "owner_name": "ML Engineering Team",
+            "owner_contact": "#ml-eng",
+            "description": "Pre-computed features for machine learning models",
+            "intended_use": "Model training, feature serving",
+            "limitations": "Features computed daily, may not reflect real-time changes",
+            "columns": [
+                {"name": "feature_id", "type": "uuid", "description": "Feature identifier", "nullable": False},
+                {"name": "user_id", "type": "uuid", "description": "User identifier", "nullable": False},
+                {"name": "feature_vector", "type": "array", "description": "Feature vector values", "nullable": False},
+                {"name": "computed_at", "type": "timestamp", "description": "Feature computation timestamp", "nullable": False},
+                {"name": "model_version", "type": "varchar(50)", "description": "Model version used", "nullable": True},
+            ],
+            "has_freshness_checks": True,
+            "has_volume_checks": False,
+            "has_sla": True,
+            "breaking_changes_30d": 0,
+            "has_release_notes": False,
+            "data_size_bytes": 10737418240,  # 10 GB
+            "file_count": 90,
+            "partition_keys": ["computed_at"],
+            "sla_hours": 24,
+            "producing_job": "feature_computation_pipeline",
+        },
+        {
+            "name": "analytics.customer_segments",
+            "display_name": "Customer Segments",
+            "owner_name": "Marketing Team",
+            "owner_contact": "marketing-data@example.com",
+            "description": "Customer segmentation and cohort analysis data",
+            "intended_use": "Marketing campaigns, personalization",
+            "limitations": "Segments updated weekly",
+            "columns": [
+                {"name": "customer_id", "type": "uuid", "description": "Customer identifier", "nullable": False},
+                {"name": "segment", "type": "varchar(50)", "description": "Customer segment name", "nullable": False},
+                {"name": "cohort_month", "type": "date", "description": "Cohort month", "nullable": False},
+                {"name": "lifetime_value", "type": "decimal(12,2)", "description": "Customer lifetime value", "nullable": True},
+                {"name": "last_purchase_date", "type": "date", "description": "Last purchase date", "nullable": True},
+            ],
+            "has_freshness_checks": False,
+            "has_volume_checks": False,
+            "has_sla": False,
+            "breaking_changes_30d": 1,
+            "has_release_notes": False,
+            "data_size_bytes": 104857600,  # 100 MB
+            "file_count": 52,
+            "partition_keys": ["cohort_month", "segment"],
+            "sla_hours": 168,  # Weekly
+            "producing_job": "customer_segmentation_weekly",
+        },
+        {
+            "name": "analytics.page_views",
+            "display_name": "Page Views",
+            "owner_name": "Analytics Team",
+            "owner_contact": "analytics@example.com",
+            "description": "Website page view tracking data",
+            "intended_use": "Web analytics, user behavior analysis",
+            "limitations": "Real-time data may have slight delays",
+            "columns": [
+                {"name": "view_id", "type": "uuid", "description": "Unique page view identifier", "nullable": False},
+                {"name": "user_id", "type": "uuid", "description": "User identifier", "nullable": True},
+                {"name": "page_url", "type": "varchar(500)", "description": "Page URL", "nullable": False},
+                {"name": "timestamp", "type": "timestamp", "description": "Page view timestamp", "nullable": False},
+                {"name": "session_id", "type": "uuid", "description": "Session identifier", "nullable": True},
+            ],
+            "has_freshness_checks": True,
+            "has_volume_checks": True,
+            "has_sla": False,
+            "breaking_changes_30d": 2,
+            "has_release_notes": False,
+            "data_size_bytes": 21474836480,  # 20 GB
+            "file_count": 730,
+            "partition_keys": ["timestamp"],
+            "sla_hours": 1,
+            "producing_job": "page_view_tracking_stream",
+        },
+        {
+            "name": "analytics.orders",
+            "display_name": "Order Data",
+            "owner_name": "E-commerce Team",
+            "owner_contact": "#ecommerce-data",
+            "description": "Customer order and transaction data",
+            "intended_use": "Order analytics, fulfillment tracking",
+            "limitations": "Refunds processed separately",
+            "columns": [
+                {"name": "order_id", "type": "uuid", "description": "Unique order identifier", "nullable": False},
+                {"name": "customer_id", "type": "uuid", "description": "Customer identifier", "nullable": False},
+                {"name": "order_date", "type": "timestamp", "description": "Order placement timestamp", "nullable": False},
+                {"name": "total_amount", "type": "decimal(12,2)", "description": "Order total amount", "nullable": False},
+                {"name": "status", "type": "varchar(50)", "description": "Order status", "nullable": False},
+                {"name": "shipping_address", "type": "text", "description": "Shipping address", "nullable": True},
+            ],
+            "has_freshness_checks": True,
+            "has_volume_checks": True,
+            "dbt_test_count": 12,
+            "has_sla": True,
+            "breaking_changes_30d": 0,
+            "has_release_notes": True,
+            "has_versioning": True,
+            "data_size_bytes": 536870912,  # 512 MB
+            "file_count": 180,
+            "partition_keys": ["order_date"],
+            "sla_hours": 6,
+            "producing_job": "order_processing_pipeline",
+        },
+        {
+            "name": "staging.api_logs",
+            "display_name": "API Request Logs",
+            "owner_name": "Platform Team",
+            "owner_contact": "platform@example.com",
+            "description": "API request and response logs for monitoring",
+            "intended_use": "API monitoring, debugging, performance analysis",
+            "limitations": "Logs retained for 30 days only",
+            "columns": [
+                {"name": "log_id", "type": "bigint", "description": "Log entry identifier", "nullable": False},
+                {"name": "request_id", "type": "uuid", "description": "Request identifier", "nullable": False},
+                {"name": "endpoint", "type": "varchar(200)", "description": "API endpoint", "nullable": False},
+                {"name": "method", "type": "varchar(10)", "description": "HTTP method", "nullable": False},
+                {"name": "status_code", "type": "integer", "description": "HTTP status code", "nullable": False},
+                {"name": "response_time_ms", "type": "integer", "description": "Response time in milliseconds", "nullable": True},
+                {"name": "timestamp", "type": "timestamp", "description": "Request timestamp", "nullable": False},
+            ],
+            "has_freshness_checks": False,
+            "has_volume_checks": False,
+            "has_sla": False,
+            "breaking_changes_30d": 3,
+            "has_release_notes": False,
+            "data_size_bytes": 4294967296,  # 4 GB
+            "file_count": 1440,
+            "partition_keys": ["timestamp", "endpoint"],
+            "sla_hours": 1,
+            "producing_job": "api_log_aggregator",
+        },
+        {
+            "name": "analytics.user_activity",
+            "display_name": "User Activity Summary",
+            "owner_name": "Analytics Team",
+            "owner_contact": "analytics@example.com",
+            "description": "Daily aggregated user activity metrics",
+            "intended_use": "User engagement analysis, reporting",
+            "limitations": "Aggregated data, not real-time",
+            "columns": [
+                {"name": "user_id", "type": "uuid", "description": "User identifier", "nullable": False},
+                {"name": "activity_date", "type": "date", "description": "Activity date", "nullable": False},
+                {"name": "sessions_count", "type": "integer", "description": "Number of sessions", "nullable": False},
+                {"name": "page_views", "type": "integer", "description": "Total page views", "nullable": False},
+                {"name": "time_spent_minutes", "type": "integer", "description": "Time spent in minutes", "nullable": True},
+            ],
+            "has_freshness_checks": True,
+            "has_volume_checks": True,
+            "dbt_test_count": 6,
+            "has_sla": True,
+            "breaking_changes_30d": 0,
+            "has_release_notes": True,
+            "data_size_bytes": 209715200,  # 200 MB
+            "file_count": 365,
+            "partition_keys": ["activity_date"],
+            "sla_hours": 24,
+            "producing_job": "user_activity_aggregation",
+        },
     ]
 
     created_datasets = []
@@ -376,6 +566,66 @@ def create_example_lineage(db: Session, datasets: list[Dataset]):
         )
         db.add(lineage)
         print(f"  ✓ {users_ds.display_name} → {revenue_ds.display_name} (join)")
+
+    # 4. analytics.user_activity depends on analytics.page_views (aggregate page views)
+    if "analytics.user_activity" in dataset_map and "analytics.page_views" in dataset_map:
+        activity_ds = dataset_map["analytics.user_activity"]
+        page_views_ds = dataset_map["analytics.page_views"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=page_views_ds.id,
+            downstream_dataset_id=activity_ds.id,
+            transformation_type="aggregate",
+        )
+        db.add(lineage)
+        print(f"  ✓ {page_views_ds.display_name} → {activity_ds.display_name} (aggregate)")
+
+    # 5. analytics.customer_segments depends on analytics.users (user segmentation)
+    if "analytics.customer_segments" in dataset_map and "analytics.users" in dataset_map:
+        segments_ds = dataset_map["analytics.customer_segments"]
+        users_ds = dataset_map["analytics.users"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=users_ds.id,
+            downstream_dataset_id=segments_ds.id,
+            transformation_type="transform",
+        )
+        db.add(lineage)
+        print(f"  ✓ {users_ds.display_name} → {segments_ds.display_name} (transform)")
+
+    # 6. analytics.revenue depends on analytics.orders (revenue calculated from orders)
+    if "analytics.revenue" in dataset_map and "analytics.orders" in dataset_map:
+        revenue_ds = dataset_map["analytics.revenue"]
+        orders_ds = dataset_map["analytics.orders"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=orders_ds.id,
+            downstream_dataset_id=revenue_ds.id,
+            transformation_type="aggregate",
+        )
+        db.add(lineage)
+        print(f"  ✓ {orders_ds.display_name} → {revenue_ds.display_name} (aggregate)")
+
+    # 7. ml.feature_store depends on analytics.users (features derived from user data)
+    if "ml.feature_store" in dataset_map and "analytics.users" in dataset_map:
+        features_ds = dataset_map["ml.feature_store"]
+        users_ds = dataset_map["analytics.users"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=users_ds.id,
+            downstream_dataset_id=features_ds.id,
+            transformation_type="feature_engineering",
+        )
+        db.add(lineage)
+        print(f"  ✓ {users_ds.display_name} → {features_ds.display_name} (feature_engineering)")
+
+    # 8. analytics.user_activity depends on analytics.users (user activity joins with user data)
+    if "analytics.user_activity" in dataset_map and "analytics.users" in dataset_map:
+        activity_ds = dataset_map["analytics.user_activity"]
+        users_ds = dataset_map["analytics.users"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=users_ds.id,
+            downstream_dataset_id=activity_ds.id,
+            transformation_type="join",
+        )
+        db.add(lineage)
+        print(f"  ✓ {users_ds.display_name} → {activity_ds.display_name} (join)")
     
     db.flush()
     
@@ -454,6 +704,57 @@ def create_example_lineage(db: Session, datasets: list[Dataset]):
             )
             db.add(lineage)
             print(f"  ✓ Column: {events_ds.display_name}.timestamp → {revenue_ds.display_name}.date")
+
+    # Column lineage: page_views -> user_activity
+    if "analytics.page_views" in dataset_map and "analytics.user_activity" in dataset_map:
+        page_views_ds = dataset_map["analytics.page_views"]
+        activity_ds = dataset_map["analytics.user_activity"]
+        
+        activity_page_views_col = column_map.get(("analytics.user_activity", "page_views"))
+        page_views_view_id_col = column_map.get(("analytics.page_views", "view_id"))
+        
+        if activity_page_views_col and page_views_view_id_col:
+            lineage = ColumnLineage(
+                upstream_column_id=page_views_view_id_col.id,
+                downstream_column_id=activity_page_views_col.id,
+                transformation_expression="COUNT(view_id)",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {page_views_ds.display_name}.view_id → {activity_ds.display_name}.page_views")
+
+    # Column lineage: users -> customer_segments
+    if "analytics.users" in dataset_map and "analytics.customer_segments" in dataset_map:
+        users_ds = dataset_map["analytics.users"]
+        segments_ds = dataset_map["analytics.customer_segments"]
+        
+        segments_customer_id_col = column_map.get(("analytics.customer_segments", "customer_id"))
+        users_user_id_col = column_map.get(("analytics.users", "user_id"))
+        
+        if segments_customer_id_col and users_user_id_col:
+            lineage = ColumnLineage(
+                upstream_column_id=users_user_id_col.id,
+                downstream_column_id=segments_customer_id_col.id,
+                transformation_expression="user_id",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {users_ds.display_name}.user_id → {segments_ds.display_name}.customer_id")
+
+    # Column lineage: orders -> revenue
+    if "analytics.orders" in dataset_map and "analytics.revenue" in dataset_map:
+        orders_ds = dataset_map["analytics.orders"]
+        revenue_ds = dataset_map["analytics.revenue"]
+        
+        revenue_amount_col = column_map.get(("analytics.revenue", "revenue_amount"))
+        orders_total_amount_col = column_map.get(("analytics.orders", "total_amount"))
+        
+        if revenue_amount_col and orders_total_amount_col:
+            lineage = ColumnLineage(
+                upstream_column_id=orders_total_amount_col.id,
+                downstream_column_id=revenue_amount_col.id,
+                transformation_expression="SUM(total_amount)",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {orders_ds.display_name}.total_amount → {revenue_ds.display_name}.revenue_amount")
     
     db.commit()
     print("✅ Lineage relationships created successfully!")

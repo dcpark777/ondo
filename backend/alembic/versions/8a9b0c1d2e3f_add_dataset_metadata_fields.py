@@ -27,7 +27,7 @@ def upgrade() -> None:
     )
     op.add_column(
         'datasets',
-        sa.Column('data_size_bytes', sa.Integer(), nullable=True)
+        sa.Column('data_size_bytes', sa.BigInteger(), nullable=True)
     )
     op.add_column(
         'datasets',

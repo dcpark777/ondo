@@ -20,6 +20,10 @@ from app.api.schemas import (
     ScoreHistoryResponse,
     UpdateMetadataRequest,
     UpdateOwnerRequest,
+    DatasetLineageResponse,
+    ColumnLineageResponse,
+    DatasetLineageItem,
+    ColumnLineageItem,
 )
 from app.db import get_db
 from app.models import (
@@ -29,17 +33,13 @@ from app.models import (
     DatasetDimensionScore,
     DatasetReason,
     DatasetScoreHistory,
+    DatasetLineage,
+    ColumnLineage,
     DimensionKeyEnum,
     ReadinessStatusEnum,
 )
 from app.services.dataset_metadata import build_metadata_from_dataset
 from app.services.scoring_service import score_and_save_dataset
-from app.services.schema_generator import (
-    columns_to_avro_schema,
-    generate_protobuf_schema,
-    generate_scala_schema,
-    generate_python_schema,
-)
 from app.services.schema_generator import (
     columns_to_avro_schema,
     generate_protobuf_schema,
@@ -538,3 +538,134 @@ def get_python_schema(dataset_id: UUID, db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate Python schema: {str(e)}")
+
+
+@router.get("/{dataset_id}/lineage", response_model=DatasetLineageResponse)
+def get_dataset_lineage(dataset_id: UUID, db: Session = Depends(get_db)):
+    """
+    Get dataset lineage (upstream and downstream relationships).
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Get upstream lineage (datasets this dataset depends on)
+    upstream_lineage = (
+        db.query(DatasetLineage)
+        .filter(DatasetLineage.downstream_dataset_id == dataset_id)
+        .all()
+    )
+    
+    upstream_items = []
+    for lineage in upstream_lineage:
+        upstream_dataset = db.query(Dataset).filter(Dataset.id == lineage.upstream_dataset_id).first()
+        if upstream_dataset:
+            upstream_items.append(
+                DatasetLineageItem(
+                    id=lineage.id,
+                    upstream_dataset_id=lineage.upstream_dataset_id,
+                    downstream_dataset_id=lineage.downstream_dataset_id,
+                    upstream_dataset_name=upstream_dataset.display_name or upstream_dataset.full_name,
+                    downstream_dataset_name=dataset.display_name or dataset.full_name,
+                    transformation_type=lineage.transformation_type,
+                    created_at=lineage.created_at,
+                )
+            )
+
+    # Get downstream lineage (datasets that depend on this dataset)
+    downstream_lineage = (
+        db.query(DatasetLineage)
+        .filter(DatasetLineage.upstream_dataset_id == dataset_id)
+        .all()
+    )
+    
+    downstream_items = []
+    for lineage in downstream_lineage:
+        downstream_dataset = db.query(Dataset).filter(Dataset.id == lineage.downstream_dataset_id).first()
+        if downstream_dataset:
+            downstream_items.append(
+                DatasetLineageItem(
+                    id=lineage.id,
+                    upstream_dataset_id=lineage.upstream_dataset_id,
+                    downstream_dataset_id=lineage.downstream_dataset_id,
+                    upstream_dataset_name=dataset.display_name or dataset.full_name,
+                    downstream_dataset_name=downstream_dataset.display_name or downstream_dataset.full_name,
+                    transformation_type=lineage.transformation_type,
+                    created_at=lineage.created_at,
+                )
+            )
+
+    return DatasetLineageResponse(upstream=upstream_items, downstream=downstream_items)
+
+
+@router.get("/{dataset_id}/columns/{column_id}/lineage", response_model=ColumnLineageResponse)
+def get_column_lineage(dataset_id: UUID, column_id: UUID, db: Session = Depends(get_db)):
+    """
+    Get column-level lineage (upstream and downstream relationships).
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    column = db.query(DatasetColumn).filter(
+        DatasetColumn.id == column_id,
+        DatasetColumn.dataset_id == dataset_id
+    ).first()
+    if not column:
+        raise HTTPException(status_code=404, detail="Column not found")
+
+    # Get upstream lineage (columns this column depends on)
+    upstream_lineage = (
+        db.query(ColumnLineage)
+        .filter(ColumnLineage.downstream_column_id == column_id)
+        .all()
+    )
+    
+    upstream_items = []
+    for lineage in upstream_lineage:
+        upstream_column = db.query(DatasetColumn).filter(DatasetColumn.id == lineage.upstream_column_id).first()
+        if upstream_column:
+            upstream_dataset = db.query(Dataset).filter(Dataset.id == upstream_column.dataset_id).first()
+            if upstream_dataset:
+                upstream_items.append(
+                    ColumnLineageItem(
+                        id=lineage.id,
+                        upstream_column_id=lineage.upstream_column_id,
+                        downstream_column_id=lineage.downstream_column_id,
+                        upstream_column_name=upstream_column.name,
+                        upstream_dataset_name=upstream_dataset.display_name or upstream_dataset.full_name,
+                        downstream_column_name=column.name,
+                        downstream_dataset_name=dataset.display_name or dataset.full_name,
+                        transformation_expression=lineage.transformation_expression,
+                        created_at=lineage.created_at,
+                    )
+                )
+
+    # Get downstream lineage (columns that depend on this column)
+    downstream_lineage = (
+        db.query(ColumnLineage)
+        .filter(ColumnLineage.upstream_column_id == column_id)
+        .all()
+    )
+    
+    downstream_items = []
+    for lineage in downstream_lineage:
+        downstream_column = db.query(DatasetColumn).filter(DatasetColumn.id == lineage.downstream_column_id).first()
+        if downstream_column:
+            downstream_dataset = db.query(Dataset).filter(Dataset.id == downstream_column.dataset_id).first()
+            if downstream_dataset:
+                downstream_items.append(
+                    ColumnLineageItem(
+                        id=lineage.id,
+                        upstream_column_id=lineage.upstream_column_id,
+                        downstream_column_id=lineage.downstream_column_id,
+                        upstream_column_name=column.name,
+                        upstream_dataset_name=dataset.display_name or dataset.full_name,
+                        downstream_column_name=downstream_column.name,
+                        downstream_dataset_name=downstream_dataset.display_name or downstream_dataset.full_name,
+                        transformation_expression=lineage.transformation_expression,
+                        created_at=lineage.created_at,
+                    )
+                )
+
+    return ColumnLineageResponse(upstream=upstream_items, downstream=downstream_items)

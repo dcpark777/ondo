@@ -21,6 +21,8 @@ from app.models import (
     DatasetDimensionScore,
     DatasetReason,
     DatasetScoreHistory,
+    DatasetLineage,
+    ColumnLineage,
     DimensionKeyEnum,
     ReadinessStatusEnum,
 )
@@ -58,10 +60,13 @@ def create_demo_datasets(db: Session, force: bool = False):
     # Clear existing data if forcing
     if force:
         print("🗑️  Clearing existing data...")
+        db.query(ColumnLineage).delete()
+        db.query(DatasetLineage).delete()
         db.query(DatasetScoreHistory).delete()
         db.query(DatasetAction).delete()
         db.query(DatasetReason).delete()
         db.query(DatasetDimensionScore).delete()
+        db.query(DatasetColumn).delete()
         db.query(Dataset).delete()
         db.commit()
 
@@ -281,7 +286,140 @@ def create_demo_datasets(db: Session, force: bool = False):
         status_str = dataset.readiness_status if isinstance(dataset.readiness_status, str) else dataset.readiness_status.value
         print(f"  - {dataset.full_name}: {dataset.readiness_score}/100 ({status_str})")
 
+    # Create example lineage relationships
+    print("\n🔗 Creating lineage relationships...")
+    create_example_lineage(db, created_datasets)
+    
     return created_datasets
+
+
+def create_example_lineage(db: Session, datasets: list[Dataset]):
+    """Create example lineage relationships between datasets and columns.
+    
+    Args:
+        db: Database session
+        datasets: List of created datasets
+    """
+    # Create a mapping of dataset full_name to dataset object
+    dataset_map = {ds.full_name: ds for ds in datasets}
+    
+    # Dataset-level lineage examples:
+    # 1. analytics.events depends on analytics.users (events table joins with users)
+    if "analytics.events" in dataset_map and "analytics.users" in dataset_map:
+        events_ds = dataset_map["analytics.events"]
+        users_ds = dataset_map["analytics.users"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=users_ds.id,
+            downstream_dataset_id=events_ds.id,
+            transformation_type="join",
+        )
+        db.add(lineage)
+        print(f"  ✓ {users_ds.display_name} → {events_ds.display_name} (join)")
+    
+    # 2. analytics.revenue depends on analytics.events (revenue calculated from events)
+    if "analytics.revenue" in dataset_map and "analytics.events" in dataset_map:
+        revenue_ds = dataset_map["analytics.revenue"]
+        events_ds = dataset_map["analytics.events"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=events_ds.id,
+            downstream_dataset_id=revenue_ds.id,
+            transformation_type="aggregate",
+        )
+        db.add(lineage)
+        print(f"  ✓ {events_ds.display_name} → {revenue_ds.display_name} (aggregate)")
+    
+    # 3. analytics.revenue also depends on analytics.users (for user segmentation)
+    if "analytics.revenue" in dataset_map and "analytics.users" in dataset_map:
+        revenue_ds = dataset_map["analytics.revenue"]
+        users_ds = dataset_map["analytics.users"]
+        lineage = DatasetLineage(
+            upstream_dataset_id=users_ds.id,
+            downstream_dataset_id=revenue_ds.id,
+            transformation_type="join",
+        )
+        db.add(lineage)
+        print(f"  ✓ {users_ds.display_name} → {revenue_ds.display_name} (join)")
+    
+    db.flush()
+    
+    # Column-level lineage examples:
+    # Get columns for each dataset and create a lookup map
+    column_map = {}  # (dataset_full_name, column_name) -> DatasetColumn
+    for dataset in datasets:
+        columns = db.query(DatasetColumn).filter(DatasetColumn.dataset_id == dataset.id).all()
+        for col in columns:
+            column_map[(dataset.full_name, col.name)] = col
+    
+    # 1. events.user_id depends on users.user_id
+    if "analytics.events" in dataset_map and "analytics.users" in dataset_map:
+        events_ds = dataset_map["analytics.events"]
+        users_ds = dataset_map["analytics.users"]
+        
+        events_user_id_col = column_map.get(("analytics.events", "user_id"))
+        users_user_id_col = column_map.get(("analytics.users", "user_id"))
+        
+        if events_user_id_col and users_user_id_col:
+            lineage = ColumnLineage(
+                upstream_column_id=users_user_id_col.id,
+                downstream_column_id=events_user_id_col.id,
+                transformation_expression="JOIN users ON events.user_id = users.user_id",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {users_ds.display_name}.user_id → {events_ds.display_name}.user_id")
+    
+    # 2. revenue.revenue_amount depends on events (aggregated)
+    if "analytics.revenue" in dataset_map and "analytics.events" in dataset_map:
+        revenue_ds = dataset_map["analytics.revenue"]
+        events_ds = dataset_map["analytics.events"]
+        
+        revenue_amount_col = column_map.get(("analytics.revenue", "revenue_amount"))
+        events_properties_col = column_map.get(("analytics.events", "properties"))
+        
+        if revenue_amount_col and events_properties_col:
+            lineage = ColumnLineage(
+                upstream_column_id=events_properties_col.id,
+                downstream_column_id=revenue_amount_col.id,
+                transformation_expression="SUM(events.properties->>'amount')",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {events_ds.display_name}.properties → {revenue_ds.display_name}.revenue_amount")
+    
+    # 3. revenue.transaction_count depends on events (count aggregation)
+    if "analytics.revenue" in dataset_map and "analytics.events" in dataset_map:
+        revenue_ds = dataset_map["analytics.revenue"]
+        events_ds = dataset_map["analytics.events"]
+        
+        transaction_count_col = column_map.get(("analytics.revenue", "transaction_count"))
+        events_event_id_col = column_map.get(("analytics.events", "event_id"))
+        
+        if transaction_count_col and events_event_id_col:
+            lineage = ColumnLineage(
+                upstream_column_id=events_event_id_col.id,
+                downstream_column_id=transaction_count_col.id,
+                transformation_expression="COUNT(events.event_id)",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {events_ds.display_name}.event_id → {revenue_ds.display_name}.transaction_count")
+    
+    # 4. events.timestamp might be used in revenue.date (date extraction)
+    if "analytics.revenue" in dataset_map and "analytics.events" in dataset_map:
+        revenue_ds = dataset_map["analytics.revenue"]
+        events_ds = dataset_map["analytics.events"]
+        
+        revenue_date_col = column_map.get(("analytics.revenue", "date"))
+        events_timestamp_col = column_map.get(("analytics.events", "timestamp"))
+        
+        if revenue_date_col and events_timestamp_col:
+            lineage = ColumnLineage(
+                upstream_column_id=events_timestamp_col.id,
+                downstream_column_id=revenue_date_col.id,
+                transformation_expression="DATE(events.timestamp)",
+            )
+            db.add(lineage)
+            print(f"  ✓ Column: {events_ds.display_name}.timestamp → {revenue_ds.display_name}.date")
+    
+    db.commit()
+    print("✅ Lineage relationships created successfully!")
 
 
 if __name__ == "__main__":

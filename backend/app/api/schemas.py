@@ -157,3 +157,50 @@ class ErrorResponse(BaseModel):
 
     detail: str
 
+
+# Lineage schemas
+class DatasetLineageItem(BaseModel):
+    """Dataset lineage relationship item."""
+
+    id: UUID
+    upstream_dataset_id: UUID
+    downstream_dataset_id: UUID
+    upstream_dataset_name: str
+    downstream_dataset_name: str
+    transformation_type: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ColumnLineageItem(BaseModel):
+    """Column lineage relationship item."""
+
+    id: UUID
+    upstream_column_id: UUID
+    downstream_column_id: UUID
+    upstream_column_name: str
+    upstream_dataset_name: str
+    downstream_column_name: str
+    downstream_dataset_name: str
+    transformation_expression: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DatasetLineageResponse(BaseModel):
+    """Response for dataset lineage endpoint."""
+
+    upstream: List[DatasetLineageItem]  # Datasets that this dataset depends on
+    downstream: List[DatasetLineageItem]  # Datasets that depend on this dataset
+
+
+class ColumnLineageResponse(BaseModel):
+    """Response for column lineage endpoint."""
+
+    upstream: List[ColumnLineageItem]  # Columns that this column depends on
+    downstream: List[ColumnLineageItem]  # Columns that depend on this column
+

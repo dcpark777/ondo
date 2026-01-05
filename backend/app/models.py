@@ -84,6 +84,18 @@ class Dataset(Base):
     score_history = relationship(
         "DatasetScoreHistory", back_populates="dataset", cascade="all, delete-orphan"
     )
+    upstream_lineage = relationship(
+        "DatasetLineage",
+        foreign_keys="DatasetLineage.downstream_dataset_id",
+        back_populates="downstream_dataset",
+        cascade="all, delete-orphan"
+    )
+    downstream_lineage = relationship(
+        "DatasetLineage",
+        foreign_keys="DatasetLineage.upstream_dataset_id",
+        back_populates="upstream_dataset",
+        cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_datasets_status_score", "readiness_status", "readiness_score"),
@@ -202,6 +214,18 @@ class DatasetColumn(Base):
 
     # Relationships
     dataset = relationship("Dataset", back_populates="columns")
+    upstream_lineage = relationship(
+        "ColumnLineage",
+        foreign_keys="ColumnLineage.downstream_column_id",
+        back_populates="downstream_column",
+        cascade="all, delete-orphan"
+    )
+    downstream_lineage = relationship(
+        "ColumnLineage",
+        foreign_keys="ColumnLineage.upstream_column_id",
+        back_populates="upstream_column",
+        cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("dataset_id", "name", name="uq_dataset_column"),
@@ -230,5 +254,89 @@ class DatasetScoreHistory(Base):
 
     __table_args__ = (
         Index("idx_score_history_dataset_recorded", "dataset_id", "recorded_at"),
+    )
+
+
+class DatasetLineage(Base):
+    """Lineage relationships between datasets (upstream -> downstream)."""
+
+    __tablename__ = "dataset_lineage"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    upstream_dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    downstream_dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    transformation_type = Column(
+        String(50), nullable=True
+    )  # e.g., 'join', 'filter', 'aggregate', 'transform', 'union'
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    upstream_dataset = relationship(
+        "Dataset",
+        foreign_keys=[upstream_dataset_id],
+        back_populates="downstream_lineage"
+    )
+    downstream_dataset = relationship(
+        "Dataset",
+        foreign_keys=[downstream_dataset_id],
+        back_populates="upstream_lineage"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("upstream_dataset_id", "downstream_dataset_id", name="uq_dataset_lineage"),
+        Index("idx_lineage_upstream", "upstream_dataset_id"),
+        Index("idx_lineage_downstream", "downstream_dataset_id"),
+    )
+
+
+class ColumnLineage(Base):
+    """Lineage relationships between columns (upstream -> downstream)."""
+
+    __tablename__ = "column_lineage"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    upstream_column_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dataset_columns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    downstream_column_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dataset_columns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    transformation_expression = Column(
+        Text, nullable=True
+    )  # Optional SQL or transformation expression
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    upstream_column = relationship(
+        "DatasetColumn",
+        foreign_keys=[upstream_column_id],
+        back_populates="downstream_lineage"
+    )
+    downstream_column = relationship(
+        "DatasetColumn",
+        foreign_keys=[downstream_column_id],
+        back_populates="upstream_lineage"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("upstream_column_id", "downstream_column_id", name="uq_column_lineage"),
+        Index("idx_column_lineage_upstream", "upstream_column_id"),
+        Index("idx_column_lineage_downstream", "downstream_column_id"),
     )
 

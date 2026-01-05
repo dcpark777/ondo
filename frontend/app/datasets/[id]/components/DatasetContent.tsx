@@ -1,15 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism'
-import { DatasetDetail, generateProtobufSchema, generateScalaSchema, generatePythonSchema } from '../../../api/client'
+import { DatasetDetail, generateProtobufSchema, generateScalaSchema, generatePythonSchema, getDatasetLineage, getColumnLineage, DatasetLineageResponse, ColumnLineageResponse } from '../../../api/client'
 
 interface DatasetContentProps {
   dataset: DatasetDetail
-  activeTab: 'overview' | 'score' | 'metadata' | 'schema'
-  setActiveTab: (tab: 'overview' | 'score' | 'metadata' | 'schema') => void
+  activeTab: 'overview' | 'score' | 'metadata' | 'schema' | 'lineage'
+  setActiveTab: (tab: 'overview' | 'score' | 'metadata' | 'schema' | 'lineage') => void
   historyData: any[]
   maxScore: number
   minScore: number
@@ -95,6 +95,26 @@ export default function DatasetContent(props: DatasetContentProps) {
   
   // Score analysis - track which dimension dropdowns are open
   const [openDimensionDropdowns, setOpenDimensionDropdowns] = useState<Set<string>>(new Set())
+  
+  // Lineage state
+  const [datasetLineage, setDatasetLineage] = useState<DatasetLineageResponse | null>(null)
+  const [loadingLineage, setLoadingLineage] = useState(false)
+  const [columnLineageMap, setColumnLineageMap] = useState<Record<string, ColumnLineageResponse>>({})
+  const [loadingColumnLineage, setLoadingColumnLineage] = useState<Record<string, boolean>>({})
+  
+  // Load dataset lineage when lineage tab is active
+  useEffect(() => {
+    if (activeTab === 'lineage' && !datasetLineage && !loadingLineage) {
+      setLoadingLineage(true)
+      getDatasetLineage(dataset.id)
+        .then(setDatasetLineage)
+        .catch(err => {
+          console.error('Failed to load dataset lineage:', err)
+          setDatasetLineage({ upstream: [], downstream: [] })
+        })
+        .finally(() => setLoadingLineage(false))
+    }
+  }, [activeTab, dataset.id, datasetLineage, loadingLineage])
 
   // Helper function to format location information
   const formatLocation = () => {
@@ -228,6 +248,7 @@ export default function DatasetContent(props: DatasetContentProps) {
               { id: 'score', label: 'Score Analysis' },
               { id: 'metadata', label: 'Metadata' },
               { id: 'schema', label: 'Schema' },
+              { id: 'lineage', label: 'Lineage' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -995,10 +1016,17 @@ export default function DatasetContent(props: DatasetContentProps) {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Description
                       </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Lineage
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {dataset.columns.map((column) => (
+                    {dataset.columns.map((column) => {
+                      const columnLineage = columnLineageMap[column.id]
+                      const isLoadingColumnLineage = loadingColumnLineage[column.id]
+                      
+                      return (
                       <tr key={column.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
@@ -1030,8 +1058,60 @@ export default function DatasetContent(props: DatasetContentProps) {
                             )}
                           </div>
                         </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={async () => {
+                              if (!columnLineage && !isLoadingColumnLineage) {
+                                setLoadingColumnLineage(prev => ({ ...prev, [column.id]: true }))
+                                try {
+                                  const lineage = await getColumnLineage(dataset.id, column.id)
+                                  setColumnLineageMap(prev => ({ ...prev, [column.id]: lineage }))
+                                } catch (err) {
+                                  console.error('Failed to load column lineage:', err)
+                                  setColumnLineageMap(prev => ({ ...prev, [column.id]: { upstream: [], downstream: [] } }))
+                                } finally {
+                                  setLoadingColumnLineage(prev => ({ ...prev, [column.id]: false }))
+                                }
+                              }
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            {isLoadingColumnLineage ? 'Loading...' : columnLineage ? 'View' : 'Show'}
+                          </button>
+                          {columnLineage && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200 text-xs">
+                              {columnLineage.upstream.length > 0 && (
+                                <div className="mb-2">
+                                  <span className="font-medium text-gray-700">From: </span>
+                                  {columnLineage.upstream.map((item, idx) => (
+                                    <span key={item.id}>
+                                      {idx > 0 && ', '}
+                                      <span className="text-blue-600">{item.upstream_column_name}</span>
+                                      <span className="text-gray-500"> ({item.upstream_dataset_name})</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {columnLineage.downstream.length > 0 && (
+                                <div>
+                                  <span className="font-medium text-gray-700">To: </span>
+                                  {columnLineage.downstream.map((item, idx) => (
+                                    <span key={item.id}>
+                                      {idx > 0 && ', '}
+                                      <span className="text-green-600">{item.downstream_column_name}</span>
+                                      <span className="text-gray-500"> ({item.downstream_dataset_name})</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {columnLineage.upstream.length === 0 && columnLineage.downstream.length === 0 && (
+                                <span className="text-gray-500 italic">No lineage</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -1161,6 +1241,86 @@ export default function DatasetContent(props: DatasetContentProps) {
           </div>
         )}
 
+        {/* Lineage Tab */}
+        {activeTab === 'lineage' && (
+          <div className="space-y-6">
+            {/* Dataset Lineage */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Dataset Lineage</h2>
+              
+              {loadingLineage ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-4 text-gray-600">Loading lineage...</p>
+                </div>
+              ) : datasetLineage ? (
+                <div className="space-y-6">
+                  {/* Upstream Lineage */}
+                  {datasetLineage.upstream.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-3">Upstream Dependencies</h3>
+                      <div className="space-y-2">
+                        {datasetLineage.upstream.map((item) => (
+                          <div key={item.id} className="p-3 bg-blue-50 rounded-md border border-blue-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Link href={`/datasets/${item.upstream_dataset_id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                  {item.upstream_dataset_name}
+                                </Link>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  → {dataset.display_name}
+                                  {item.transformation_type && (
+                                    <span className="ml-2 text-gray-400">({item.transformation_type})</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Downstream Lineage */}
+                  {datasetLineage.downstream.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-3">Downstream Dependencies</h3>
+                      <div className="space-y-2">
+                        {datasetLineage.downstream.map((item) => (
+                          <div key={item.id} className="p-3 bg-green-50 rounded-md border border-green-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Link href={`/datasets/${item.downstream_dataset_id}`} className="text-sm font-medium text-green-600 hover:text-green-800">
+                                  {item.downstream_dataset_name}
+                                </Link>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {dataset.display_name} →
+                                  {item.transformation_type && (
+                                    <span className="ml-2 text-gray-400">({item.transformation_type})</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {datasetLineage.upstream.length === 0 && datasetLineage.downstream.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No lineage information available for this dataset</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-sm">No lineage information available</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

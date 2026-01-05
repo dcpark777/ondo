@@ -405,3 +405,78 @@ export async function generatePythonSchema(id: string): Promise<SchemaGeneration
 
   return response.json()
 }
+
+/**
+ * Lineage interfaces
+ */
+export interface DatasetLineageItem {
+  id: string
+  upstream_dataset_id: string
+  downstream_dataset_id: string
+  upstream_dataset_name: string
+  downstream_dataset_name: string
+  transformation_type: string | null
+  created_at: string
+}
+
+export interface ColumnLineageItem {
+  id: string
+  upstream_column_id: string
+  downstream_column_id: string
+  upstream_column_name: string
+  upstream_dataset_name: string
+  downstream_column_name: string
+  downstream_dataset_name: string
+  transformation_expression: string | null
+  created_at: string
+}
+
+export interface DatasetLineageResponse {
+  upstream: DatasetLineageItem[]
+  downstream: DatasetLineageItem[]
+}
+
+export interface ColumnLineageResponse {
+  upstream: ColumnLineageItem[]
+  downstream: ColumnLineageItem[]
+}
+
+/**
+ * Get dataset lineage
+ */
+export async function getDatasetLineage(id: string): Promise<DatasetLineageResponse> {
+  const url = `${API_URL}/api/datasets/${id}/lineage`
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to get dataset lineage: ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Get column lineage
+ */
+export async function getColumnLineage(datasetId: string, columnId: string): Promise<ColumnLineageResponse> {
+  const url = `${API_URL}/api/datasets/${datasetId}/columns/${columnId}/lineage`
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to get column lineage: ${response.statusText}`)
+  }
+
+  return response.json()
+}

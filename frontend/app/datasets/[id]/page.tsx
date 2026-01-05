@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   getDatasetDetail,
@@ -18,6 +18,7 @@ import DatasetContent from './components/DatasetContent'
 
 export default function DatasetDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
 
   const [dataset, setDataset] = useState<DatasetDetail | null>(null)
@@ -41,8 +42,51 @@ export default function DatasetDetailPage() {
   const [applyingDescription, setApplyingDescription] = useState(false)
   const [applyingColumns, setApplyingColumns] = useState(false)
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'metadata' | 'schema'>('overview')
+  // Tab state - read from URL on mount
+  const validTabs: Array<'overview' | 'score' | 'metadata' | 'schema' | 'lineage'> = ['overview', 'score', 'metadata', 'schema', 'lineage']
+  
+  // Get initial tab from URL
+  const getTabFromUrl = (): 'overview' | 'score' | 'metadata' | 'schema' | 'lineage' => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tab = params.get('tab')
+      if (tab && validTabs.includes(tab as any)) {
+        return tab as 'overview' | 'score' | 'metadata' | 'schema' | 'lineage'
+      }
+    }
+    return 'overview'
+  }
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'metadata' | 'schema' | 'lineage'>(getTabFromUrl())
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: 'overview' | 'score' | 'metadata' | 'schema' | 'lineage') => {
+    setActiveTab(tab)
+    const params = new URLSearchParams(window.location.search)
+    if (tab === 'overview') {
+      params.delete('tab') // Remove tab param for default tab
+    } else {
+      params.set('tab', tab)
+    }
+    const newUrl = `/datasets/${id}${params.toString() ? `?${params.toString()}` : ''}`
+    router.push(newUrl, { scroll: false })
+  }
+
+  // Sync tab state with URL on mount and when URL changes
+  useEffect(() => {
+    // Check URL on mount
+    const tab = getTabFromUrl()
+    setActiveTab(tab)
+    
+    // Listen for browser back/forward
+    const handlePopState = () => {
+      const tab = getTabFromUrl()
+      setActiveTab(tab)
+    }
+    
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [id]) // Re-check when dataset ID changes
 
   const fetchDataset = async () => {
     setLoading(true)
@@ -286,7 +330,7 @@ export default function DatasetDetailPage() {
     <DatasetContent
       dataset={dataset}
       activeTab={activeTab}
-      setActiveTab={setActiveTab}
+      setActiveTab={handleTabChange}
       historyData={historyData}
       maxScore={maxScore}
       minScore={minScore}

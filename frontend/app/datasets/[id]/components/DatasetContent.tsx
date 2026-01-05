@@ -8,8 +8,8 @@ import { DatasetDetail, generateProtobufSchema, generateScalaSchema, generatePyt
 
 interface DatasetContentProps {
   dataset: DatasetDetail
-  activeTab: 'overview' | 'score' | 'metadata' | 'schema' | 'lineage'
-  setActiveTab: (tab: 'overview' | 'score' | 'metadata' | 'schema' | 'lineage') => void
+  activeTab: 'overview' | 'score' | 'schema' | 'lineage'
+  setActiveTab: (tab: 'overview' | 'score' | 'schema' | 'lineage') => void
   historyData: any[]
   maxScore: number
   minScore: number
@@ -246,7 +246,6 @@ export default function DatasetContent(props: DatasetContentProps) {
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'score', label: 'Score Analysis' },
-              { id: 'metadata', label: 'Metadata' },
               { id: 'schema', label: 'Schema' },
               { id: 'lineage', label: 'Lineage' },
             ].map((tab) => (
@@ -271,109 +270,338 @@ export default function DatasetContent(props: DatasetContentProps) {
       <div className="space-y-6">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Quick Stats */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Stats</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-gray-500">Readiness Score</p>
-                  <p className="text-3xl font-bold text-gray-900">{dataset.readiness_score}/100</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Status</p>
-                  <span
-                    className={'inline-flex px-3 py-1 text-sm font-semibold rounded-full ' + getStatusBadgeClass(
-                      dataset.readiness_status
-                    )}
-                  >
-                    {getStatusLabel(dataset.readiness_status)}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Columns</p>
-                  <p className="text-sm text-gray-900">{dataset.columns.length} columns</p>
+          <div className="space-y-6">
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Quick Stats */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Stats</h2>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Readiness Score</p>
+                    <p className="text-3xl font-bold text-gray-900">{dataset.readiness_score}/100</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Status</p>
+                    <span
+                      className={'inline-flex px-3 py-1 text-sm font-semibold rounded-full ' + getStatusBadgeClass(
+                        dataset.readiness_status
+                      )}
+                    >
+                      {getStatusLabel(dataset.readiness_status)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Columns</p>
+                    <p className="text-sm text-gray-900">{dataset.columns.length} columns</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Description */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Description</h2>
-              {dataset.description ? (
-                <p className="text-sm text-gray-700">{dataset.description}</p>
-              ) : (
-                <p className="text-sm text-gray-400 italic">No description available</p>
-              )}
-            </div>
-
-            {/* Owner Info */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Owner</h2>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-sm text-gray-500">Name</p>
-                  <p className="text-sm text-gray-900">
-                    {dataset.owner_name || <span className="text-gray-400 italic">Not assigned</span>}
-                  </p>
-                </div>
-                {dataset.owner_contact && (
-                  <div>
-                    <p className="text-sm text-gray-500">Contact</p>
-                    <p className="text-sm text-gray-900">{dataset.owner_contact}</p>
+              {/* Location */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Location</h2>
+                {locationInfo ? (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm text-gray-500">Type</p>
+                      <p className="text-sm font-medium text-gray-900 mt-1">{locationInfo.label}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Path</p>
+                      <p className="text-sm font-mono text-gray-900 mt-1 break-all">{locationInfo.display}</p>
+                    </div>
+                    {locationInfo.details.length > 0 && (
+                      <div className="pt-2 border-t border-gray-200">
+                        <p className="text-sm text-gray-500 mb-2">Details</p>
+                        <div className="space-y-2">
+                          {locationInfo.details.map((detail, idx) => (
+                            <div key={idx} className="flex justify-between">
+                              <span className="text-sm text-gray-600">{detail.label}:</span>
+                              <span className="text-sm font-medium text-gray-900">{detail.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">No location information available</p>
                 )}
               </div>
             </div>
 
-            {/* Intended Use & Limitations */}
+            {/* Description Section */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Usage</h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-500">Intended Use</p>
-                  <p className="text-sm text-gray-900 mt-1">
-                    {dataset.intended_use || <span className="text-gray-400 italic">Not specified</span>}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Limitations</p>
-                  <p className="text-sm text-gray-900 mt-1">
-                    {dataset.limitations || <span className="text-gray-400 italic">None specified</span>}
-                  </p>
-                </div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Description</h2>
+                {!isEditingMetadata && (
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleGenerateDescription}
+                      disabled={loadingAiDescription}
+                      className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400"
+                      title="Generate dataset description from table/column names"
+                    >
+                      {loadingAiDescription ? 'Generating...' : '✨ AI Suggest'}
+                    </button>
+                    <button
+                      onClick={() => setIsEditingMetadata(true)}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {/* AI Column Descriptions Suggestion */}
+              {aiColumnSuggestions && Object.keys(aiColumnSuggestions).length > 0 && (
+                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="flex justify-between items-start mb-3">
+                    <p className="text-sm font-medium text-blue-800">✨ AI Column Descriptions</p>
+                    <button
+                      onClick={() => setAiColumnSuggestions(null)}
+                      className="text-blue-600 hover:text-blue-800 text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  
+                  <div className="mb-3 space-y-2 max-h-64 overflow-y-auto">
+                    {Object.entries(aiColumnSuggestions).map(([colName, description]) => (
+                      <div key={colName} className="bg-white rounded border border-gray-200 p-2">
+                        <div className="text-xs font-medium text-gray-700 mb-1">{colName}</div>
+                        <div className="text-sm text-gray-900">{description}</div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleApplyColumnDescriptions}
+                      disabled={applyingColumns}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {applyingColumns ? 'Applying...' : 'Apply All'}
+                    </button>
+                    <button
+                      onClick={() => setAiColumnSuggestions(null)}
+                      className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Description Suggestion with Diff Preview */}
+              {aiDescriptionSuggestion && !isEditingMetadata && (
+                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-md">
+                  <div className="flex justify-between items-start mb-3">
+                    <p className="text-sm font-medium text-purple-800">✨ AI Suggestion</p>
+                    <button
+                      onClick={() => setAiDescriptionSuggestion(null)}
+                      className="text-purple-600 hover:text-purple-800 text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  
+                  {/* Diff Preview */}
+                  <div className="mb-3 bg-white rounded border border-gray-200 p-3">
+                    <div className="text-xs text-gray-500 mb-1">Current:</div>
+                    <div className="text-sm text-gray-400 italic mb-3 min-h-[1.5rem]">
+                      {dataset.description || <span className="text-gray-300">(No description)</span>}
+                    </div>
+                    <div className="text-xs text-gray-500 mb-1">Suggested:</div>
+                    <div className="text-sm text-gray-900">
+                      {aiDescriptionSuggestion}
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleApplyDescription}
+                      disabled={applyingDescription}
+                      className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {applyingDescription ? 'Applying...' : 'Apply'}
+                    </button>
+                    <button
+                      onClick={() => setAiDescriptionSuggestion(null)}
+                      className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Dataset Description Display */}
+              {!isEditingMetadata && dataset.description && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Description</div>
+                  <p className="text-sm text-gray-900">{dataset.description}</p>
+                </div>
+              )}
+
+              {isEditingMetadata ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Display Name
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Intended Use
+                    </label>
+                    <textarea
+                      value={intendedUse}
+                      onChange={(e) => setIntendedUse(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Limitations
+                    </label>
+                    <textarea
+                      value={limitations}
+                      onChange={(e) => setLimitations(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleUpdateMetadata}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingMetadata(false)
+                        setDisplayName(dataset.display_name)
+                        setIntendedUse(dataset.intended_use || '')
+                        setLimitations(dataset.limitations || '')
+                      }}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {!dataset.description && (
+                    <p className="text-sm text-gray-400 italic">No description available</p>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Intended Use</p>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {dataset.intended_use || (
+                        <span className="text-gray-400 italic">Not specified</span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Limitations</p>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {dataset.limitations || (
+                        <span className="text-gray-400 italic">None specified</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Location */}
+            {/* Owner Section */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Location</h2>
-              {locationInfo ? (
-                <div className="space-y-3">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Owner</h2>
+                {!isEditingOwner && (
+                  <button
+                    onClick={() => setIsEditingOwner(true)}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+
+              {isEditingOwner ? (
+                <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-500">Type</p>
-                    <p className="text-sm font-medium text-gray-900 mt-1">{locationInfo.label}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Owner Name
+                    </label>
+                    <input
+                      type="text"
+                      value={ownerName}
+                      onChange={(e) => setOwnerName(e.target.value)}
+                      placeholder="e.g., Data Team"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Path</p>
-                    <p className="text-sm font-mono text-gray-900 mt-1 break-all">{locationInfo.display}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Contact
+                    </label>
+                    <input
+                      type="text"
+                      value={ownerContact}
+                      onChange={(e) => setOwnerContact(e.target.value)}
+                      placeholder="e.g., #data-team or email@example.com"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
                   </div>
-                  {locationInfo.details.length > 0 && (
-                    <div className="pt-2 border-t border-gray-200">
-                      <p className="text-sm text-gray-500 mb-2">Details</p>
-                      <div className="space-y-2">
-                        {locationInfo.details.map((detail, idx) => (
-                          <div key={idx} className="flex justify-between">
-                            <span className="text-sm text-gray-600">{detail.label}:</span>
-                            <span className="text-sm font-medium text-gray-900">{detail.value}</span>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleUpdateOwner}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingOwner(false)
+                        setOwnerName(dataset.owner_name || '')
+                        setOwnerContact(dataset.owner_contact || '')
+                      }}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Owner</p>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {dataset.owner_name || (
+                        <span className="text-gray-400 italic">No owner assigned</span>
+                      )}
+                    </p>
+                  </div>
+                  {dataset.owner_contact && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Contact</p>
+                      <p className="text-sm text-gray-900 mt-1">{dataset.owner_contact}</p>
                     </div>
                   )}
                 </div>
-              ) : (
-                <p className="text-sm text-gray-400 italic">No location information available</p>
               )}
             </div>
           </div>
@@ -654,281 +882,6 @@ export default function DatasetContent(props: DatasetContentProps) {
           </div>
         )}
 
-        {/* Metadata Tab */}
-        {activeTab === 'metadata' && (
-          <div className="space-y-6">
-            {/* Description Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Description</h2>
-                {!isEditingMetadata && (
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleGenerateDescription}
-                      disabled={loadingAiDescription}
-                      className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400"
-                      title="Generate dataset description from table/column names"
-                    >
-                      {loadingAiDescription ? 'Generating...' : '✨ AI Suggest'}
-                    </button>
-                    <button
-                      onClick={() => setIsEditingMetadata(true)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* AI Column Descriptions Suggestion */}
-              {aiColumnSuggestions && Object.keys(aiColumnSuggestions).length > 0 && (
-                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                  <div className="flex justify-between items-start mb-3">
-                    <p className="text-sm font-medium text-blue-800">✨ AI Column Descriptions</p>
-                    <button
-                      onClick={() => setAiColumnSuggestions(null)}
-                      className="text-blue-600 hover:text-blue-800 text-lg leading-none"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  
-                  <div className="mb-3 space-y-2 max-h-64 overflow-y-auto">
-                    {Object.entries(aiColumnSuggestions).map(([colName, description]) => (
-                      <div key={colName} className="bg-white rounded border border-gray-200 p-2">
-                        <div className="text-xs font-medium text-gray-700 mb-1">{colName}</div>
-                        <div className="text-sm text-gray-900">{description}</div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleApplyColumnDescriptions}
-                      disabled={applyingColumns}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {applyingColumns ? 'Applying...' : 'Apply All'}
-                    </button>
-                    <button
-                      onClick={() => setAiColumnSuggestions(null)}
-                      className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* AI Description Suggestion with Diff Preview */}
-              {aiDescriptionSuggestion && !isEditingMetadata && (
-                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-md">
-                  <div className="flex justify-between items-start mb-3">
-                    <p className="text-sm font-medium text-purple-800">✨ AI Suggestion</p>
-                    <button
-                      onClick={() => setAiDescriptionSuggestion(null)}
-                      className="text-purple-600 hover:text-purple-800 text-lg leading-none"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  
-                  {/* Diff Preview */}
-                  <div className="mb-3 bg-white rounded border border-gray-200 p-3">
-                    <div className="text-xs text-gray-500 mb-1">Current:</div>
-                    <div className="text-sm text-gray-400 italic mb-3 min-h-[1.5rem]">
-                      {dataset.description || <span className="text-gray-300">(No description)</span>}
-                    </div>
-                    <div className="text-xs text-gray-500 mb-1">Suggested:</div>
-                    <div className="text-sm text-gray-900">
-                      {aiDescriptionSuggestion}
-                    </div>
-                  </div>
-                  
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleApplyDescription}
-                      disabled={applyingDescription}
-                      className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {applyingDescription ? 'Applying...' : 'Apply'}
-                    </button>
-                    <button
-                      onClick={() => setAiDescriptionSuggestion(null)}
-                      className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Dataset Description Display */}
-              {!isEditingMetadata && dataset.description && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-md">
-                  <div className="text-xs font-medium text-gray-500 mb-1">Description</div>
-                  <p className="text-sm text-gray-900">{dataset.description}</p>
-                </div>
-              )}
-
-              {isEditingMetadata ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Intended Use
-                    </label>
-                    <textarea
-                      value={intendedUse}
-                      onChange={(e) => setIntendedUse(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Limitations
-                    </label>
-                    <textarea
-                      value={limitations}
-                      onChange={(e) => setLimitations(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleUpdateMetadata}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsEditingMetadata(false)
-                        setDisplayName(dataset.display_name)
-                        setIntendedUse(dataset.intended_use || '')
-                        setLimitations(dataset.limitations || '')
-                      }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Intended Use</p>
-                    <p className="text-sm text-gray-900 mt-1">
-                      {dataset.intended_use || (
-                        <span className="text-gray-400 italic">Not specified</span>
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Limitations</p>
-                    <p className="text-sm text-gray-900 mt-1">
-                      {dataset.limitations || (
-                        <span className="text-gray-400 italic">None specified</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Owner Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Owner</h2>
-                {!isEditingOwner && (
-                  <button
-                    onClick={() => setIsEditingOwner(true)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-
-              {isEditingOwner ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Owner Name
-                    </label>
-                    <input
-                      type="text"
-                      value={ownerName}
-                      onChange={(e) => setOwnerName(e.target.value)}
-                      placeholder="e.g., Data Team"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Contact
-                    </label>
-                    <input
-                      type="text"
-                      value={ownerContact}
-                      onChange={(e) => setOwnerContact(e.target.value)}
-                      placeholder="e.g., #data-team or email@example.com"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleUpdateOwner}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsEditingOwner(false)
-                        setOwnerName(dataset.owner_name || '')
-                        setOwnerContact(dataset.owner_contact || '')
-                      }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Owner</p>
-                    <p className="text-sm text-gray-900 mt-1">
-                      {dataset.owner_name || (
-                        <span className="text-gray-400 italic">No owner assigned</span>
-                      )}
-                    </p>
-                  </div>
-                  {dataset.owner_contact && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Contact</p>
-                      <p className="text-sm text-gray-900 mt-1">{dataset.owner_contact}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Schema Tab */}
         {activeTab === 'schema' && (
@@ -1244,9 +1197,9 @@ export default function DatasetContent(props: DatasetContentProps) {
         {/* Lineage Tab */}
         {activeTab === 'lineage' && (
           <div className="space-y-6">
-            {/* Dataset Lineage */}
+            {/* Dataset Lineage Graph */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Dataset Lineage</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Dataset Lineage</h2>
               
               {loadingLineage ? (
                 <div className="text-center py-8">
@@ -1254,62 +1207,119 @@ export default function DatasetContent(props: DatasetContentProps) {
                   <p className="mt-4 text-gray-600">Loading lineage...</p>
                 </div>
               ) : datasetLineage ? (
-                <div className="space-y-6">
-                  {/* Upstream Lineage */}
-                  {datasetLineage.upstream.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-3">Upstream Dependencies</h3>
-                      <div className="space-y-2">
-                        {datasetLineage.upstream.map((item) => (
-                          <div key={item.id} className="p-3 bg-blue-50 rounded-md border border-blue-200">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Link href={`/datasets/${item.upstream_dataset_id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
-                                  {item.upstream_dataset_name}
-                                </Link>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  → {dataset.display_name}
+                <div className="relative">
+                  {/* Lineage Graph */}
+                  <div className="flex items-center justify-between min-h-[300px]">
+                    {/* Downstream Section - Left */}
+                    <div className="flex-1 flex flex-col items-end pr-8">
+                      {datasetLineage.downstream.length > 0 ? (
+                        <div className="space-y-4 w-full max-w-xs">
+                          <h3 className="text-sm font-medium text-gray-500 mb-4 text-right">Downstream</h3>
+                          {datasetLineage.downstream.map((item) => (
+                            <div key={item.id} className="relative">
+                              {/* Connection Line */}
+                              <div className="absolute right-0 top-1/2 w-8 h-0.5 bg-green-400 transform -translate-y-1/2"></div>
+                              <div className="absolute right-8 top-1/2 w-0.5 h-8 bg-green-400 transform -translate-y-1/2"></div>
+                              {/* Dataset Card */}
+                              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                <Link 
+                                  href={`/datasets/${item.id}`}
+                                  className="block group"
+                                >
+                                  <div className="text-sm font-semibold text-green-700 group-hover:text-green-900 mb-1">
+                                    {item.display_name}
+                                  </div>
+                                  <div className="text-xs text-gray-600 truncate">
+                                    {item.full_name}
+                                  </div>
                                   {item.transformation_type && (
-                                    <span className="ml-2 text-gray-400">({item.transformation_type})</span>
+                                    <div className="mt-2">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                        {item.transformation_type}
+                                      </span>
+                                    </div>
                                   )}
-                                </p>
+                                </Link>
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-400 text-sm">
+                          <p>No downstream dependencies</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Center - Current Dataset */}
+                    <div className="flex-shrink-0 relative z-10">
+                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 border-4 border-blue-700 rounded-xl p-6 shadow-lg min-w-[200px]">
+                        <div className="text-center">
+                          <div className="text-white font-bold text-lg mb-1">
+                            {dataset.display_name}
                           </div>
-                        ))}
+                          <div className="text-blue-100 text-xs mb-3 truncate">
+                            {dataset.full_name}
+                          </div>
+                          <div className="inline-flex items-center px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm">
+                            <span className="text-white text-xs font-medium">Current Dataset</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Downstream Lineage */}
-                  {datasetLineage.downstream.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-3">Downstream Dependencies</h3>
-                      <div className="space-y-2">
-                        {datasetLineage.downstream.map((item) => (
-                          <div key={item.id} className="p-3 bg-green-50 rounded-md border border-green-200">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Link href={`/datasets/${item.downstream_dataset_id}`} className="text-sm font-medium text-green-600 hover:text-green-800">
-                                  {item.downstream_dataset_name}
-                                </Link>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {dataset.display_name} →
+                    {/* Upstream Section - Right */}
+                    <div className="flex-1 flex flex-col items-start pl-8">
+                      {datasetLineage.upstream.length > 0 ? (
+                        <div className="space-y-4 w-full max-w-xs">
+                          <h3 className="text-sm font-medium text-gray-500 mb-4">Upstream</h3>
+                          {datasetLineage.upstream.map((item) => (
+                            <div key={item.id} className="relative">
+                              {/* Connection Line */}
+                              <div className="absolute left-0 top-1/2 w-8 h-0.5 bg-blue-400 transform -translate-y-1/2"></div>
+                              <div className="absolute left-8 top-1/2 w-0.5 h-8 bg-blue-400 transform -translate-y-1/2"></div>
+                              {/* Dataset Card */}
+                              <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                <Link 
+                                  href={`/datasets/${item.id}`}
+                                  className="block group"
+                                >
+                                  <div className="text-sm font-semibold text-blue-700 group-hover:text-blue-900 mb-1">
+                                    {item.display_name}
+                                  </div>
+                                  <div className="text-xs text-gray-600 truncate">
+                                    {item.full_name}
+                                  </div>
                                   {item.transformation_type && (
-                                    <span className="ml-2 text-gray-400">({item.transformation_type})</span>
+                                    <div className="mt-2">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                        {item.transformation_type}
+                                      </span>
+                                    </div>
                                   )}
-                                </p>
+                                </Link>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-400 text-sm">
+                          <p>No upstream dependencies</p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
 
+                  {/* Empty State */}
                   {datasetLineage.upstream.length === 0 && datasetLineage.downstream.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No lineage information available for this dataset</p>
+                    <div className="text-center py-12 text-gray-500">
+                      <div className="mb-4">
+                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium">No lineage information available</p>
+                      <p className="text-xs text-gray-400 mt-1">This dataset has no upstream or downstream dependencies</p>
                     </div>
                   )}
                 </div>

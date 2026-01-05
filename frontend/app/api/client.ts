@@ -411,12 +411,9 @@ export async function generatePythonSchema(id: string): Promise<SchemaGeneration
  */
 export interface DatasetLineageItem {
   id: string
-  upstream_dataset_id: string
-  downstream_dataset_id: string
-  upstream_dataset_name: string
-  downstream_dataset_name: string
+  full_name: string
+  display_name: string
   transformation_type: string | null
-  created_at: string
 }
 
 export interface ColumnLineageItem {

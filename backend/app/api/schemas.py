@@ -163,12 +163,9 @@ class DatasetLineageItem(BaseModel):
     """Dataset lineage relationship item."""
 
     id: UUID
-    upstream_dataset_id: UUID
-    downstream_dataset_id: UUID
-    upstream_dataset_name: str
-    downstream_dataset_name: str
+    full_name: str
+    display_name: str
     transformation_type: Optional[str] = None
-    created_at: datetime
 
     class Config:
         from_attributes = True

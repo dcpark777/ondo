@@ -562,13 +562,10 @@ def get_dataset_lineage(dataset_id: UUID, db: Session = Depends(get_db)):
         if upstream_dataset:
             upstream_items.append(
                 DatasetLineageItem(
-                    id=lineage.id,
-                    upstream_dataset_id=lineage.upstream_dataset_id,
-                    downstream_dataset_id=lineage.downstream_dataset_id,
-                    upstream_dataset_name=upstream_dataset.display_name or upstream_dataset.full_name,
-                    downstream_dataset_name=dataset.display_name or dataset.full_name,
+                    id=upstream_dataset.id,
+                    full_name=upstream_dataset.full_name,
+                    display_name=upstream_dataset.display_name or upstream_dataset.full_name,
                     transformation_type=lineage.transformation_type,
-                    created_at=lineage.created_at,
                 )
             )
 
@@ -585,13 +582,10 @@ def get_dataset_lineage(dataset_id: UUID, db: Session = Depends(get_db)):
         if downstream_dataset:
             downstream_items.append(
                 DatasetLineageItem(
-                    id=lineage.id,
-                    upstream_dataset_id=lineage.upstream_dataset_id,
-                    downstream_dataset_id=lineage.downstream_dataset_id,
-                    upstream_dataset_name=dataset.display_name or dataset.full_name,
-                    downstream_dataset_name=downstream_dataset.display_name or downstream_dataset.full_name,
+                    id=downstream_dataset.id,
+                    full_name=downstream_dataset.full_name,
+                    display_name=downstream_dataset.display_name or downstream_dataset.full_name,
                     transformation_type=lineage.transformation_type,
-                    created_at=lineage.created_at,
                 )
             )
 

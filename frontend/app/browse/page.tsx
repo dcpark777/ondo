@@ -88,15 +88,15 @@ export default function BrowsePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Browse Datasets</h1>
-        <p className="text-gray-600">Explore datasets organized by category</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Browse Datasets</h1>
+        <p className="text-gray-600 dark:text-gray-400">Explore datasets organized by category</p>
       </div>
 
       {/* Group By Selector */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Group by:</span>
-          <div className="flex gap-2">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Group by:</span>
+          <div className="flex flex-wrap gap-2">
             {([
               { value: 'domain', label: 'Domain' },
               { value: 'classification', label: 'Classification' },
@@ -109,7 +109,7 @@ export default function BrowsePage() {
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   groupBy === opt.value
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                 }`}
               >
                 {opt.label}
@@ -122,19 +122,19 @@ export default function BrowsePage() {
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading datasets...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading datasets...</p>
         </div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
           <p className="text-gray-500">No datasets found</p>
         </div>
       ) : (
         <div className="space-y-3">
           {Object.entries(grouped).map(([group, items]) => (
-            <div key={group} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div key={group} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
               <button
                 onClick={() => toggleGroup(group)}
-                className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <svg
@@ -145,39 +145,44 @@ export default function BrowsePage() {
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <h3 className="text-base font-semibold text-gray-900">{group}</h3>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{group}</h3>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                     {items.length}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                   <span>Avg score: {Math.round(items.reduce((sum, d) => sum + d.readiness_score, 0) / items.length)}</span>
                 </div>
               </button>
               {expandedGroups.has(group) && (
-                <div className="border-t border-gray-200">
-                  <div className="divide-y divide-gray-100">
+                <div className="border-t border-gray-200 dark:border-gray-700">
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
                     {items
                       .sort((a, b) => b.readiness_score - a.readiness_score)
                       .map(ds => (
                         <Link
                           key={ds.id}
                           href={`/datasets/${ds.id}`}
-                          className="block px-5 py-3 hover:bg-gray-50 transition-colors"
+                          className="block px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-gray-900 truncate">{ds.display_name}</span>
-                                <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusBadgeClass(ds.readiness_status)}`}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{ds.display_name}</span>
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full shrink-0 ${getStatusBadgeClass(ds.readiness_status)}`}>
                                   {getStatusLabel(ds.readiness_status)}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-500 truncate mt-0.5">{ds.full_name}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{ds.full_name}</div>
+                              {ds.description && (
+                                <div className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5 max-w-md">
+                                  {ds.description}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-4 ml-4">
+                            <div className="flex items-center gap-4 ml-4 shrink-0">
                               {ds.owner_name && (
-                                <span className="text-xs text-gray-500">{ds.owner_name}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">{ds.owner_name}</span>
                               )}
                               <div className="flex items-center gap-1">
                                 <span className={`text-sm font-bold ${getScoreColor(ds.readiness_score)}`}>

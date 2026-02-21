@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    ColumnGlossaryTermResponse,
     GlossaryTermCreate,
     GlossaryTermResponse,
     GlossaryTermUpdate,
@@ -252,3 +253,37 @@ def unlink_term_from_column(
     db.delete(link)
     db.commit()
     logger.info("Unlinked term %s from column %s", term_id, column_id)
+
+
+# --- Column-centric glossary endpoints ---
+
+columns_router = APIRouter(prefix="/api/columns", tags=["glossary"])
+
+
+@columns_router.get(
+    "/{column_id}/glossary-terms",
+    response_model=List[ColumnGlossaryTermResponse],
+)
+def get_column_glossary_terms(column_id: UUID, db: Session = Depends(get_db)):
+    """Return all glossary terms linked to a specific column."""
+    column = db.query(DatasetColumn).filter(DatasetColumn.id == column_id).first()
+    if not column:
+        raise HTTPException(status_code=404, detail="Column not found")
+
+    links = (
+        db.query(GlossaryColumnLink, GlossaryTerm)
+        .join(GlossaryTerm, GlossaryColumnLink.term_id == GlossaryTerm.id)
+        .filter(GlossaryColumnLink.column_id == column_id)
+        .order_by(GlossaryTerm.name)
+        .all()
+    )
+
+    return [
+        ColumnGlossaryTermResponse(
+            term_id=term.id,
+            term_name=term.name,
+            term_definition=term.definition,
+            domain=term.domain,
+        )
+        for _link, term in links
+    ]

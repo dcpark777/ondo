@@ -7,7 +7,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ai, bulk, dashboard, datasets, glossary, health, ingest, notifications, profiling, quality, usage
+from app.api import ai, audit, bulk, dashboard, datasets, glossary, health, ingest, notifications, profiling, quality, schema_changes, usage
 from app.config import settings
 
 # Configure logging
@@ -41,9 +41,12 @@ app.include_router(quality.router)
 app.include_router(profiling.router)
 app.include_router(ingest.router)
 app.include_router(glossary.router)
+app.include_router(glossary.columns_router)
 app.include_router(notifications.router)
 app.include_router(bulk.router)
 app.include_router(usage.router)
+app.include_router(schema_changes.router)
+app.include_router(audit.router)
 if settings.ai_assist_enabled:
     app.include_router(ai.router)
 

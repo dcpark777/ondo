@@ -82,7 +82,7 @@ export default function NotificationBell() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 rounded-md"
+        className="relative p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-md"
       >
         <svg
           className="w-5 h-5"
@@ -105,9 +105,9 @@ export default function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-          <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">
+        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Notifications
             </h3>
             {unreadCount > 0 && (
@@ -121,7 +121,7 @@ export default function NotificationBell() {
           </div>
           <div className="max-h-80 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-gray-500">
+              <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
                 No notifications
               </div>
             ) : (
@@ -129,8 +129,8 @@ export default function NotificationBell() {
                 <div
                   key={notification.id}
                   className={
-                    'px-4 py-3 border-b border-gray-100 hover:bg-gray-50 ' +
-                    (!notification.read ? 'bg-blue-50' : '')
+                    'px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 ' +
+                    (!notification.read ? 'bg-blue-50 dark:bg-blue-900/30' : '')
                   }
                 >
                   <div className="flex justify-between items-start">
@@ -142,13 +142,13 @@ export default function NotificationBell() {
                         setIsOpen(false)
                       }}
                     >
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {notification.title}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         {new Date(notification.created_at).toLocaleString()}
                       </p>
                     </Link>

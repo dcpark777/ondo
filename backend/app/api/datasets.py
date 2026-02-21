@@ -2,6 +2,8 @@
 Dataset API endpoints.
 """
 
+import csv
+import io
 import logging
 from typing import List, Optional
 from uuid import UUID
@@ -9,6 +11,7 @@ from uuid import UUID
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -35,6 +38,7 @@ from app.models import (
     DatasetTag,
     ReadinessStatusEnum,
 )
+from app.services.audit import log_audit
 from app.services.dataset_metadata import build_metadata_from_dataset
 from app.services.scoring_service import score_and_save_dataset
 from app.services.schema_generator import (
@@ -119,6 +123,8 @@ def list_datasets(
     domain: Optional[str] = Query(None, description="Filter by domain (comma-separated)"),
     tag: Optional[str] = Query(None, description="Filter by tag (comma-separated)"),
     q: Optional[str] = Query(None, description="Search in full_name and display_name"),
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Max number of results to return"),
+    offset: Optional[int] = Query(None, ge=0, description="Number of results to skip"),
     db: Session = Depends(get_db),
 ):
     """
@@ -204,8 +210,13 @@ def list_datasets(
     # Get total count before pagination
     total = query.count()
 
-    # Order by score descending
-    datasets = query.order_by(Dataset.readiness_score.desc()).all()
+    # Order by score descending, then apply pagination
+    query = query.order_by(Dataset.readiness_score.desc())
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    datasets = query.all()
 
     # Preload tags for all datasets in a single query
     dataset_ids = [ds.id for ds in datasets]
@@ -224,6 +235,7 @@ def list_datasets(
             id=ds.id,
             full_name=ds.full_name,
             display_name=ds.display_name,
+            description=ds.description,
             owner_name=ds.owner_name,
             readiness_score=ds.readiness_score,
             readiness_status=ds.readiness_status.value if isinstance(ds.readiness_status, ReadinessStatusEnum) else str(ds.readiness_status),
@@ -272,6 +284,9 @@ def update_owner(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     logger.info("Updating owner for dataset %s", dataset_id)
+    old_owner = dataset.owner_name
+    old_contact = dataset.owner_contact
+
     # Update owner fields
     if request.owner_name is not None:
         dataset.owner_name = request.owner_name
@@ -283,6 +298,18 @@ def update_owner(
 
     # Re-score the dataset (this saves history and updates actions)
     score_and_save_dataset(db, dataset, metadata)
+
+    log_audit(
+        db,
+        dataset_id=dataset_id,
+        action="owner.updated",
+        details={
+            "old_owner_name": old_owner,
+            "new_owner_name": dataset.owner_name,
+            "old_owner_contact": old_contact,
+            "new_owner_contact": dataset.owner_contact,
+        },
+    )
 
     db.commit()
     db.refresh(dataset)
@@ -306,6 +333,10 @@ def update_metadata(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     logger.info("Updating metadata for dataset %s", dataset_id)
+    old_display_name = dataset.display_name
+    old_intended_use = dataset.intended_use
+    old_limitations = dataset.limitations
+
     # Update metadata fields
     if request.display_name is not None:
         dataset.display_name = request.display_name
@@ -319,6 +350,20 @@ def update_metadata(
 
     # Re-score the dataset (this saves history and updates actions)
     score_and_save_dataset(db, dataset, metadata)
+
+    log_audit(
+        db,
+        dataset_id=dataset_id,
+        action="metadata.updated",
+        details={
+            "old_display_name": old_display_name,
+            "new_display_name": dataset.display_name,
+            "old_intended_use": old_intended_use,
+            "new_intended_use": dataset.intended_use,
+            "old_limitations": old_limitations,
+            "new_limitations": dataset.limitations,
+        },
+    )
 
     db.commit()
     db.refresh(dataset)
@@ -816,3 +861,89 @@ def get_impact_analysis(
         "total_impacted": len(impacted),
         "impacted": impacted,
     }
+
+
+@router.get("/{dataset_id}/export")
+def export_dataset(
+    dataset_id: UUID,
+    format: str = Query("json", description="Export format: csv or json"),
+    db: Session = Depends(get_db),
+):
+    """
+    Export dataset metadata and columns.
+
+    - format=json: Full dataset detail as JSON (reuses build_dataset_detail_response).
+    - format=csv: Dataset metadata header row + one row per column.
+    """
+    detail = build_dataset_detail_response(db, dataset_id)
+
+    if format == "json":
+        return JSONResponse(
+            content=detail.model_dump(mode="json"),
+            headers={
+                "Content-Disposition": f'attachment; filename="{detail.display_name}.json"'
+            },
+        )
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow(
+            [
+                "dataset_name",
+                "dataset_description",
+                "readiness_score",
+                "readiness_status",
+                "owner_name",
+                "column_name",
+                "column_type",
+                "column_nullable",
+                "column_description",
+            ]
+        )
+
+        if detail.columns:
+            for col in detail.columns:
+                writer.writerow(
+                    [
+                        detail.display_name,
+                        detail.description or "",
+                        detail.readiness_score,
+                        detail.readiness_status,
+                        detail.owner_name or "",
+                        col.name,
+                        col.type or "",
+                        "true" if col.nullable else ("false" if col.nullable is False else ""),
+                        col.description or "",
+                    ]
+                )
+        else:
+            writer.writerow(
+                [
+                    detail.display_name,
+                    detail.description or "",
+                    detail.readiness_score,
+                    detail.readiness_status,
+                    detail.owner_name or "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
+
+        output.seek(0)
+        logger.info("Exported dataset %s as CSV", dataset_id)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{detail.display_name}.csv"'
+            },
+        )
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Invalid format '{format}'. Must be 'csv' or 'json'.",
+    )

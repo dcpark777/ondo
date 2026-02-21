@@ -1,9 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism'
-import { DatasetDetail, generateProtobufSchema, generateScalaSchema, generatePythonSchema, getColumnLineage, ColumnLineageResponse, getDatasetProfiles, ColumnProfile } from '../../../api/client'
+import {
+  DatasetDetail,
+  generateProtobufSchema,
+  generateScalaSchema,
+  generatePythonSchema,
+  getColumnLineage,
+  ColumnLineageResponse,
+  getDatasetProfiles,
+  ColumnProfile,
+  SchemaChange,
+  getSchemaChanges,
+  takeSchemaSnapshot,
+  SchemaSnapshotResult,
+  ColumnGlossaryTerm,
+  getColumnGlossaryTerms,
+  searchGlossaryTerms,
+  linkTermToColumn,
+  unlinkTermFromColumn,
+  GlossaryTerm,
+} from '../../../api/client'
 
 interface SchemaTabProps {
   dataset: DatasetDetail
@@ -19,6 +38,164 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
   const [loadingProfiles, setLoadingProfiles] = useState(false)
   const [profilesLoaded, setProfilesLoaded] = useState(false)
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null)
+  const [schemaChanges, setSchemaChanges] = useState<SchemaChange[]>([])
+  const [changesLoaded, setChangesLoaded] = useState(false)
+  const [loadingChanges, setLoadingChanges] = useState(false)
+  const [takingSnapshot, setTakingSnapshot] = useState(false)
+  const [snapshotResult, setSnapshotResult] = useState<SchemaSnapshotResult | null>(null)
+
+  // Glossary term state
+  const [columnTermsMap, setColumnTermsMap] = useState<Record<string, ColumnGlossaryTerm[]>>({})
+  const [loadingTerms, setLoadingTerms] = useState<Record<string, boolean>>({})
+  const [linkDropdownOpen, setLinkDropdownOpen] = useState<string | null>(null)
+  const [termSearchQuery, setTermSearchQuery] = useState('')
+  const [termSearchResults, setTermSearchResults] = useState<GlossaryTerm[]>([])
+  const [searchingTerms, setSearchingTerms] = useState(false)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
+
+  // Schema history functions
+  const loadSchemaChanges = async () => {
+    setLoadingChanges(true)
+    try {
+      const changes = await getSchemaChanges(dataset.id)
+      setSchemaChanges(changes)
+      setChangesLoaded(true)
+    } catch (err) {
+      console.error('Failed to load schema changes:', err)
+    } finally {
+      setLoadingChanges(false)
+    }
+  }
+
+  const handleTakeSnapshot = async () => {
+    setTakingSnapshot(true)
+    setSnapshotResult(null)
+    try {
+      const result = await takeSchemaSnapshot(dataset.id)
+      setSnapshotResult(result)
+      // Refresh changes after snapshot
+      const changes = await getSchemaChanges(dataset.id)
+      setSchemaChanges(changes)
+      setChangesLoaded(true)
+    } catch (err) {
+      console.error('Failed to take snapshot:', err)
+      alert(err instanceof Error ? err.message : 'Failed to take schema snapshot')
+    } finally {
+      setTakingSnapshot(false)
+    }
+  }
+
+  const getChangeIcon = (changeType: string) => {
+    switch (changeType) {
+      case 'column_added':
+        return { symbol: '+', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200' }
+      case 'column_removed':
+        return { symbol: '-', color: 'text-red-600', bg: 'bg-red-100', border: 'border-red-200' }
+      case 'column_type_changed':
+        return { symbol: '~', color: 'text-yellow-600', bg: 'bg-yellow-100', border: 'border-yellow-200' }
+      case 'column_nullable_changed':
+        return { symbol: '?', color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200' }
+      default:
+        return { symbol: '*', color: 'text-gray-600', bg: 'bg-gray-100', border: 'border-gray-200' }
+    }
+  }
+
+  const getChangeDescription = (change: SchemaChange) => {
+    switch (change.change_type) {
+      case 'column_added':
+        return `Column "${change.column_name}" added (type: ${change.new_value || 'unknown'})`
+      case 'column_removed':
+        return `Column "${change.column_name}" removed (was: ${change.old_value || 'unknown'})`
+      case 'column_type_changed':
+        return `Column "${change.column_name}" type changed from ${change.old_value || 'unknown'} to ${change.new_value || 'unknown'}`
+      case 'column_nullable_changed':
+        return `Column "${change.column_name}" nullable changed from ${change.old_value} to ${change.new_value}`
+      default:
+        return `Column "${change.column_name}": ${change.change_type}`
+    }
+  }
+
+  // Load glossary terms for all columns on mount
+  useEffect(() => {
+    if (dataset.columns && dataset.columns.length > 0) {
+      for (const col of dataset.columns) {
+        loadColumnTerms(col.id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataset.id])
+
+  const loadColumnTerms = useCallback(async (columnId: string) => {
+    setLoadingTerms(prev => ({ ...prev, [columnId]: true }))
+    try {
+      const terms = await getColumnGlossaryTerms(columnId)
+      setColumnTermsMap(prev => ({ ...prev, [columnId]: terms }))
+    } catch {
+      setColumnTermsMap(prev => ({ ...prev, [columnId]: [] }))
+    } finally {
+      setLoadingTerms(prev => ({ ...prev, [columnId]: false }))
+    }
+  }, [])
+
+  const handleTermSearch = useCallback((query: string) => {
+    setTermSearchQuery(query)
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    if (!query.trim()) {
+      setTermSearchResults([])
+      return
+    }
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearchingTerms(true)
+      try {
+        const results = await searchGlossaryTerms(query)
+        setTermSearchResults(results)
+      } catch {
+        setTermSearchResults([])
+      } finally {
+        setSearchingTerms(false)
+      }
+    }, 300)
+  }, [])
+
+  const handleLinkTerm = useCallback(async (termId: string, columnId: string) => {
+    try {
+      await linkTermToColumn(termId, columnId)
+      await loadColumnTerms(columnId)
+    } catch (err) {
+      console.error('Failed to link term:', err)
+    }
+    setLinkDropdownOpen(null)
+    setTermSearchQuery('')
+    setTermSearchResults([])
+  }, [loadColumnTerms])
+
+  const handleUnlinkTerm = useCallback(async (termId: string, columnId: string) => {
+    try {
+      await unlinkTermFromColumn(termId, columnId)
+      setColumnTermsMap(prev => ({
+        ...prev,
+        [columnId]: (prev[columnId] || []).filter(t => t.term_id !== termId),
+      }))
+    } catch (err) {
+      console.error('Failed to unlink term:', err)
+    }
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setLinkDropdownOpen(null)
+        setTermSearchQuery('')
+        setTermSearchResults([])
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -121,6 +298,7 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nullable</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Glossary Terms</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lineage</th>
                 </tr>
               </thead>
@@ -233,6 +411,90 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
                       <td className="px-4 py-3">
                         <div className="text-sm text-gray-600">
                           {column.description || <span className="text-gray-400 italic">No description</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1.5 relative">
+                          {loadingTerms[column.id] ? (
+                            <span className="text-xs text-gray-400">Loading...</span>
+                          ) : (
+                            <>
+                              {(columnTermsMap[column.id] || []).map(term => (
+                                <span
+                                  key={term.term_id}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-medium"
+                                  title={term.term_definition}
+                                >
+                                  {term.term_name}
+                                  {term.domain && (
+                                    <span className="text-indigo-400 text-[10px]">({term.domain})</span>
+                                  )}
+                                  <button
+                                    onClick={() => handleUnlinkTerm(term.term_id, column.id)}
+                                    className="ml-0.5 text-indigo-400 hover:text-indigo-700"
+                                    title="Unlink term"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </span>
+                              ))}
+                              <div className="relative" ref={linkDropdownOpen === column.id ? dropdownRef : null}>
+                                <button
+                                  onClick={() => {
+                                    setLinkDropdownOpen(linkDropdownOpen === column.id ? null : column.id)
+                                    setTermSearchQuery('')
+                                    setTermSearchResults([])
+                                  }}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-dashed border-gray-300 hover:border-indigo-300 rounded-full transition-colors"
+                                  title="Link glossary term"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  Link
+                                </button>
+                                {linkDropdownOpen === column.id && (
+                                  <div className="absolute z-20 top-full left-0 mt-1 w-72 bg-white rounded-lg shadow-lg border border-gray-200 p-2">
+                                    <input
+                                      type="text"
+                                      value={termSearchQuery}
+                                      onChange={(e) => handleTermSearch(e.target.value)}
+                                      placeholder="Search glossary terms..."
+                                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                                      autoFocus
+                                    />
+                                    <div className="mt-1 max-h-48 overflow-y-auto">
+                                      {searchingTerms ? (
+                                        <div className="px-3 py-2 text-xs text-gray-400">Searching...</div>
+                                      ) : termSearchResults.length > 0 ? (
+                                        termSearchResults
+                                          .filter(t => !(columnTermsMap[column.id] || []).some(ct => ct.term_id === t.id))
+                                          .map(term => (
+                                            <button
+                                              key={term.id}
+                                              onClick={() => handleLinkTerm(term.id, column.id)}
+                                              className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 rounded-md transition-colors"
+                                            >
+                                              <div className="font-medium text-gray-900">{term.name}</div>
+                                              <div className="text-xs text-gray-500 truncate">{term.definition}</div>
+                                              {term.domain && (
+                                                <span className="text-[10px] text-indigo-500">{term.domain}</span>
+                                              )}
+                                            </button>
+                                          ))
+                                      ) : termSearchQuery.trim() ? (
+                                        <div className="px-3 py-2 text-xs text-gray-400">No terms found</div>
+                                      ) : (
+                                        <div className="px-3 py-2 text-xs text-gray-400">Type to search terms</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -416,6 +678,77 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
           </div>
         </div>
       )}
+
+      {/* Schema History */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Schema History</h2>
+          <div className="flex space-x-2">
+            {!changesLoaded && (
+              <button
+                onClick={loadSchemaChanges}
+                disabled={loadingChanges}
+                className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed border border-gray-300"
+              >
+                {loadingChanges ? 'Loading...' : 'Load History'}
+              </button>
+            )}
+            <button
+              onClick={handleTakeSnapshot}
+              disabled={takingSnapshot}
+              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {takingSnapshot ? 'Taking Snapshot...' : 'Take Snapshot'}
+            </button>
+          </div>
+        </div>
+
+        {/* Snapshot result banner */}
+        {snapshotResult && (
+          <div className={'mb-4 p-3 rounded-lg border text-sm ' + (snapshotResult.changes_detected > 0 ? 'bg-yellow-50 border-yellow-200 text-yellow-800' : 'bg-green-50 border-green-200 text-green-800')}>
+            {snapshotResult.changes_detected > 0
+              ? `Snapshot taken. ${snapshotResult.changes_detected} change${snapshotResult.changes_detected !== 1 ? 's' : ''} detected.`
+              : 'Snapshot taken. No changes detected since last snapshot.'}
+          </div>
+        )}
+
+        {/* Schema changes timeline */}
+        {changesLoaded ? (
+          schemaChanges.length > 0 ? (
+            <div className="space-y-3">
+              {schemaChanges.map((change) => {
+                const icon = getChangeIcon(change.change_type)
+                return (
+                  <div key={change.id} className="flex items-start space-x-3">
+                    <div className={'flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold border ' + icon.bg + ' ' + icon.color + ' ' + icon.border}>
+                      {icon.symbol}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900">
+                        {getChangeDescription(change)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(change.detected_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-gray-500">
+              <p className="text-sm">No schema changes recorded yet</p>
+              <p className="text-xs mt-1 text-gray-400">
+                Take a snapshot to start tracking schema changes
+              </p>
+            </div>
+          )
+        ) : (
+          <div className="text-center py-6 text-gray-500">
+            <p className="text-sm">Click &quot;Load History&quot; or &quot;Take Snapshot&quot; to view schema change history</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

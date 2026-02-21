@@ -8,6 +8,7 @@ export interface DatasetListItem {
   id: string
   full_name: string
   display_name: string
+  description: string | null
   owner_name: string | null
   readiness_score: number
   readiness_status: string
@@ -32,6 +33,8 @@ export interface ListDatasetsParams {
   domain?: string
   tag?: string
   q?: string
+  limit?: number
+  offset?: number
 }
 
 export interface DimensionScore {
@@ -133,6 +136,8 @@ export async function listDatasets(
   if (params.domain) searchParams.append('domain', params.domain)
   if (params.tag) searchParams.append('tag', params.tag)
   if (params.q) searchParams.append('q', params.q)
+  if (params.limit != null) searchParams.append('limit', params.limit.toString())
+  if (params.offset != null) searchParams.append('offset', params.offset.toString())
 
   const url = `${API_URL}/api/datasets${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
   
@@ -1017,6 +1022,41 @@ export async function unlinkTermFromColumn(termId: string, columnId: string): Pr
 }
 
 /**
+ * Column glossary term (lightweight response)
+ */
+export interface ColumnGlossaryTerm {
+  term_id: string
+  term_name: string
+  term_definition: string
+  domain: string | null
+}
+
+/**
+ * Get glossary terms linked to a specific column
+ */
+export async function getColumnGlossaryTerms(columnId: string): Promise<ColumnGlossaryTerm[]> {
+  const url = `${API_URL}/api/columns/${columnId}/glossary-terms`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch column glossary terms: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Search glossary terms (uses existing list endpoint with q param)
+ */
+export async function searchGlossaryTerms(query: string): Promise<GlossaryTerm[]> {
+  return listGlossaryTerms({ q: query })
+}
+
+/**
+ * Export dataset as CSV or JSON (triggers file download)
+ */
+export function exportDataset(datasetId: string, format: 'csv' | 'json'): void {
+  const url = `${API_URL}/api/datasets/${datasetId}/export?format=${format}`
+  window.open(url, '_blank')
+}
+
+/**
  * Facets
  */
 
@@ -1130,6 +1170,53 @@ export async function getPopularDatasets(days: number = 30, limit: number = 10):
   return response.json()
 }
 
+/**
+ * Audit Log
+ */
+
+export interface AuditLogEntry {
+  id: string
+  dataset_id: string | null
+  action: string
+  actor: string | null
+  details: Record<string, any> | null
+  created_at: string
+}
+
+export interface AuditLogListResponse {
+  entries: AuditLogEntry[]
+  total: number
+}
+
+export interface AuditLogParams {
+  dataset_id?: string
+  action?: string
+  actor?: string
+  limit?: number
+  offset?: number
+}
+
+export async function getAuditLog(params: AuditLogParams = {}): Promise<AuditLogListResponse> {
+  const searchParams = new URLSearchParams()
+  if (params.dataset_id) searchParams.append('dataset_id', params.dataset_id)
+  if (params.action) searchParams.append('action', params.action)
+  if (params.actor) searchParams.append('actor', params.actor)
+  if (params.limit != null) searchParams.append('limit', params.limit.toString())
+  if (params.offset != null) searchParams.append('offset', params.offset.toString())
+
+  const url = `${API_URL}/api/audit${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch audit log: ${response.statusText}`)
+  return response.json()
+}
+
+export async function getDatasetAuditLog(datasetId: string, limit: number = 50): Promise<AuditLogListResponse> {
+  const url = `${API_URL}/api/audit/datasets/${datasetId}?limit=${limit}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch dataset audit log: ${response.statusText}`)
+  return response.json()
+}
+
 // Bulk Operations
 
 export interface BulkTagRequest {
@@ -1168,5 +1255,55 @@ export async function bulkUpdateClassification(data: BulkClassificationRequest):
     body: JSON.stringify(data),
   })
   if (!response.ok) throw new Error(`Failed to bulk update classification: ${response.statusText}`)
+  return response.json()
+}
+
+// Schema Change Detection
+
+export interface SchemaChange {
+  id: string
+  dataset_id: string
+  change_type: string
+  column_name: string
+  old_value: string | null
+  new_value: string | null
+  detected_at: string
+}
+
+export interface SchemaSnapshot {
+  id: string
+  dataset_id: string
+  columns_hash: string
+  column_count: number
+  created_at: string
+}
+
+export interface SchemaSnapshotResult {
+  snapshot_id: string
+  changes_detected: number
+  changes: SchemaChange[]
+}
+
+export async function getSchemaChanges(datasetId: string, limit: number = 50): Promise<SchemaChange[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/schema/changes?limit=${limit}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch schema changes: ${response.statusText}`)
+  return response.json()
+}
+
+export async function getSchemaSnapshots(datasetId: string, limit: number = 10): Promise<SchemaSnapshot[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/schema/snapshots?limit=${limit}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch schema snapshots: ${response.statusText}`)
+  return response.json()
+}
+
+export async function takeSchemaSnapshot(datasetId: string): Promise<SchemaSnapshotResult> {
+  const url = `${API_URL}/api/datasets/${datasetId}/schema/snapshot`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Failed to take schema snapshot: ${response.statusText}`)
   return response.json()
 }

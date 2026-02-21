@@ -63,28 +63,28 @@ export default function DashboardPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-1">Dataset readiness overview</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">Dataset readiness overview</p>
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-500">Total Datasets</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{summary.total_datasets}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Datasets</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">{summary.total_datasets}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-500">Average Score</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{summary.average_score}<span className="text-lg text-gray-500">/100</span></p>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Average Score</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">{summary.average_score}<span className="text-lg text-gray-500">/100</span></p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-500">Production Ready</p>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Production Ready</p>
           <p className="text-3xl font-bold text-green-600 mt-1">
             {(summary.status_distribution['production_ready'] || 0) + (summary.status_distribution['gold'] || 0)}
           </p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-500">Needs Attention</p>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Needs Attention</p>
           <p className="text-3xl font-bold text-red-600 mt-1">
             {(summary.status_distribution['draft'] || 0)}
           </p>
@@ -93,13 +93,13 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Score Distribution */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Score Distribution</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Score Distribution</h2>
           <div className="space-y-3">
             {Object.entries(summary.score_distribution).map(([bucket, count]) => (
               <div key={bucket} className="flex items-center gap-3">
-                <span className="text-sm text-gray-600 w-16">{bucket}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-6 relative">
+                <span className="text-sm text-gray-600 dark:text-gray-400 w-16">{bucket}</span>
+                <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-6 relative">
                   <div
                     className={`h-6 rounded-full ${
                       bucket === '85-100' ? 'bg-green-500' :
@@ -111,15 +111,15 @@ export default function DashboardPage() {
                     style={{ width: `${(count / maxBucket) * 100}%` }}
                   />
                 </div>
-                <span className="text-sm font-semibold text-gray-900 w-8 text-right">{count}</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 w-8 text-right">{count}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Status Distribution */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Status Distribution</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Status Distribution</h2>
           <div className="space-y-3">
             {['gold', 'production_ready', 'internal', 'draft'].map((status) => {
               const count = summary.status_distribution[status] || 0
@@ -129,7 +129,7 @@ export default function DashboardPage() {
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full w-32 justify-center ${getStatusBadgeClass(status)}`}>
                     {getStatusLabel(status)}
                   </span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-6">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-6">
                     <div
                       className={`h-6 rounded-full ${
                         status === 'gold' ? 'bg-yellow-400' :
@@ -140,7 +140,7 @@ export default function DashboardPage() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-sm font-semibold text-gray-900 w-8 text-right">{count}</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 w-8 text-right">{count}</span>
                 </div>
               )
             })}
@@ -149,18 +149,18 @@ export default function DashboardPage() {
       </div>
 
       {/* Dimension Health */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Dimension Health</h2>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Dimension Health</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {['ownership', 'documentation', 'schema_hygiene', 'data_quality', 'stability', 'operational'].map((dim) => {
             const pct = summary.dimension_health[dim] || 0
             return (
               <div key={dim} className="space-y-1">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-700">{getDimensionLabel(dim)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">{getDimensionLabel(dim)}</span>
                   <span className="font-semibold text-gray-900">{pct}%</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-3">
+                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-3">
                   <div
                     className={`h-3 rounded-full ${scoreBarColor(pct)}`}
                     style={{ width: `${pct}%` }}
@@ -174,8 +174,8 @@ export default function DashboardPage() {
 
       {/* Score Trend Sparkline */}
       {trends && trends.trends.length > 1 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Score Trend (Last {trends.days} Days)</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6 mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Score Trend (Last {trends.days} Days)</h2>
           <div className="h-24 relative">
             <svg viewBox={`0 0 ${trends.trends.length * 20} 100`} className="w-full h-full" preserveAspectRatio="none">
               {(() => {
@@ -209,7 +209,7 @@ export default function DashboardPage() {
               })()}
             </svg>
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
             <span>{trends.trends[0]?.date}</span>
             <span>{trends.trends[trends.trends.length - 1]?.date}</span>
           </div>
@@ -218,15 +218,15 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Top Actions */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Recommended Actions</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Top Recommended Actions</h2>
           {summary.top_actions.length > 0 ? (
             <div className="space-y-3">
               {summary.top_actions.map((action) => (
-                <div key={action.action_key} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                <div key={action.action_key} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 dark:bg-gray-700/50 rounded-md">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{action.title}</p>
-                    <p className="text-xs text-gray-500">{action.dataset_count} dataset{action.dataset_count !== 1 ? 's' : ''}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{action.dataset_count} dataset{action.dataset_count !== 1 ? 's' : ''}</p>
                   </div>
                   <span className="text-sm font-semibold text-green-600">+{action.total_gain} pts</span>
                 </div>
@@ -238,22 +238,22 @@ export default function DashboardPage() {
         </div>
 
         {/* Needs Attention */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Needs Attention</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Needs Attention</h2>
           {summary.lowest_scoring.length > 0 ? (
             <div className="space-y-3">
               {summary.lowest_scoring.map((ds) => (
                 <Link
                   key={ds.id}
                   href={`/datasets/${ds.id}`}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 dark:bg-gray-700/50 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{ds.display_name}</p>
-                    <p className="text-xs text-gray-500">{ds.full_name}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{ds.display_name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{ds.full_name}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-900">{ds.readiness_score}</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{ds.readiness_score}</span>
                     <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusBadgeClass(ds.readiness_status)}`}>
                       {getStatusLabel(ds.readiness_status)}
                     </span>
@@ -268,12 +268,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Recently Scored */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Recently Scored</h2>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Recently Scored</h2>
         {summary.recently_scored.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dataset</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
@@ -281,21 +281,21 @@ export default function DashboardPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Scored</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {summary.recently_scored.map((ds) => (
-                  <tr key={ds.id} className="hover:bg-gray-50">
+                  <tr key={ds.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 py-3">
                       <Link href={`/datasets/${ds.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
                         {ds.display_name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{ds.readiness_score}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{ds.readiness_score}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusBadgeClass(ds.readiness_status)}`}>
                         {getStatusLabel(ds.readiness_status)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {ds.last_scored_at ? new Date(ds.last_scored_at).toLocaleDateString() : 'Never'}
                     </td>
                   </tr>
@@ -310,19 +310,19 @@ export default function DashboardPage() {
 
       {/* Most Popular */}
       {popular.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Viewed</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-6 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Most Viewed</h2>
           <div className="space-y-3">
             {popular.map((ds, i) => (
-              <Link key={ds.id} href={`/datasets/${ds.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
+              <Link key={ds.id} href={`/datasets/${ds.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">{ds.display_name}</div>
-                    <div className="text-xs text-gray-500">{ds.view_count} views · {ds.unique_viewers} viewers</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{ds.display_name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{ds.view_count} views · {ds.unique_viewers} viewers</div>
                   </div>
                 </div>
-                <span className="text-sm font-semibold text-gray-700">{ds.readiness_score}</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ds.readiness_score}</span>
               </Link>
             ))}
           </div>

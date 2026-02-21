@@ -23,6 +23,7 @@ from app.models import (
     ReadinessStatusEnum,
 )
 from app.scoring.engine import score_dataset
+from app.services.audit import log_audit
 
 
 def score_and_save_dataset(
@@ -121,6 +122,19 @@ def score_and_save_dataset(
         _create_score_change_notifications(
             db, dataset, old_score, score_result.total_score
         )
+
+    # Log audit entry for scoring
+    log_audit(
+        db,
+        dataset_id=dataset.id,
+        action="dataset.scored",
+        actor="system",
+        details={
+            "old_score": old_score,
+            "new_score": score_result.total_score,
+            "status": score_result.status.value,
+        },
+    )
 
     logger.info("Dataset %s scored: %d (%s)", dataset.id, score_result.total_score, score_result.status.value)
     return dataset

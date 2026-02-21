@@ -543,6 +543,50 @@ class Notification(Base):
     dataset = relationship("Dataset")
 
 
+class SchemaSnapshot(Base):
+    """Schema snapshot for change detection."""
+
+    __tablename__ = "schema_snapshots"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    columns_hash = Column(String(64), nullable=False)
+    column_data = Column(JSONB, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    dataset = relationship("Dataset")
+
+
+class SchemaChange(Base):
+    """Detected schema change record."""
+
+    __tablename__ = "schema_changes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    change_type = Column(String(50), nullable=False)
+    column_name = Column(String(255), nullable=False)
+    old_value = Column(String(500), nullable=True)
+    new_value = Column(String(500), nullable=True)
+    detected_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True
+    )
+
+    # Relationships
+    dataset = relationship("Dataset")
+
+
 class DatasetView(Base):
     """Dataset view tracking for usage metrics."""
 
@@ -566,6 +610,29 @@ class DatasetView(Base):
     __table_args__ = (
         Index("idx_dataset_views_dataset_viewed", "dataset_id", "viewed_at"),
     )
+
+
+class AuditLog(Base):
+    """Audit log for tracking changes to datasets and related entities."""
+
+    __tablename__ = "audit_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    action = Column(String(100), nullable=False)
+    actor = Column(String(255), nullable=True)
+    details = Column(JSONB, nullable=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True
+    )
+
+    # Relationships
+    dataset = relationship("Dataset")
 
 
 class ColumnProfile(Base):

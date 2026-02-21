@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { DatasetDetail, ScoreHistory, checkWatch, startWatching, stopWatching, recordDatasetView } from '../../../api/client'
+import { DatasetDetail, ScoreHistory, checkWatch, startWatching, stopWatching, recordDatasetView, exportDataset } from '../../../api/client'
 import {
   getStatusBadgeClass,
   getStatusLabel,
@@ -16,11 +16,13 @@ import SchemaTab from './SchemaTab'
 import LineageTab from './LineageTab'
 import DetailsTab from './DetailsTab'
 import QualityTab from './QualityTab'
+import UsageTab from './UsageTab'
+import ActivityTab from './ActivityTab'
 
 interface DatasetContentProps {
   dataset: DatasetDetail
-  activeTab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details'
-  setActiveTab: (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details') => void
+  activeTab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'usage' | 'activity' | 'details'
+  setActiveTab: (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'usage' | 'activity' | 'details') => void
   historyData: ScoreHistory[]
   maxScore: number
   minScore: number
@@ -109,6 +111,19 @@ export default function DatasetContent(props: DatasetContentProps) {
   const locationDisplay = formatLocationDisplay(dataset)
   const [watching, setWatching] = useState(false)
   const [watchLoading, setWatchLoading] = useState(false)
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false)
+  const exportDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setExportDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     const userId = getUserId()
@@ -146,33 +161,70 @@ export default function DatasetContent(props: DatasetContentProps) {
       {/* Back button */}
       <Link
         href="/datasets"
-        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6"
+        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 mb-6"
       >
         ← Back to Datasets
       </Link>
 
       {/* Header with Score */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 truncate">
               {dataset.display_name}
             </h1>
-            <p className="text-gray-600">{dataset.full_name}</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base truncate">{dataset.full_name}</p>
             {locationDisplay && (
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${getLocationBadgeColor(dataset.location_type)}`}>
                   {getLocationIcon(dataset.location_type)}
                   <span>{getLocationLabel(dataset.location_type)}</span>
                 </span>
-                <span className="text-sm text-gray-500 font-mono">
+                <span className="text-sm text-gray-500 font-mono truncate">
                   {locationDisplay}
                 </span>
               </div>
             )}
           </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-3 mb-2">
+          <div className="flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-0">
+            <div className="flex items-center gap-3 md:mb-2">
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="Export dataset"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {exportDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-20">
+                    <button
+                      onClick={() => {
+                        exportDataset(dataset.id, 'csv')
+                        setExportDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-md"
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      onClick={() => {
+                        exportDataset(dataset.id, 'json')
+                        setExportDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-b-md"
+                    >
+                      Export JSON
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={toggleWatch}
                 disabled={watchLoading}
@@ -189,9 +241,9 @@ export default function DatasetContent(props: DatasetContentProps) {
                 </svg>
                 {watching ? 'Watching' : 'Watch'}
               </button>
-              <div className="text-5xl font-bold text-gray-900">
+              <div className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-gray-100">
                 {dataset.readiness_score}
-                <span className="text-2xl text-gray-500">/100</span>
+                <span className="text-xl sm:text-2xl text-gray-500">/100</span>
               </div>
             </div>
             <span
@@ -206,25 +258,27 @@ export default function DatasetContent(props: DatasetContentProps) {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px" aria-label="Tabs">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+          <nav className="flex -mb-px min-w-max" aria-label="Tabs">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'score', label: 'Score Analysis' },
               { id: 'schema', label: 'Schema' },
               { id: 'lineage', label: 'Lineage' },
               { id: 'quality', label: 'Quality Rules' },
+              { id: 'usage', label: 'Usage' },
+              { id: 'activity', label: 'Activity' },
               { id: 'details', label: 'Details' },
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details')}
+                onClick={() => setActiveTab(tab.id as 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'usage' | 'activity' | 'details')}
                 className={
                   'px-6 py-4 text-sm font-medium border-b-2 transition-colors ' +
                   (activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600')
                 }
               >
                 {tab.label}
@@ -255,6 +309,12 @@ export default function DatasetContent(props: DatasetContentProps) {
         )}
         {activeTab === 'quality' && (
           <QualityTab dataset={dataset} />
+        )}
+        {activeTab === 'usage' && (
+          <UsageTab dataset={dataset} />
+        )}
+        {activeTab === 'activity' && (
+          <ActivityTab dataset={dataset} />
         )}
         {activeTab === 'details' && (
           <DetailsTab dataset={dataset} />

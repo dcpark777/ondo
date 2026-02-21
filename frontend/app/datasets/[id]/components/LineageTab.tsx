@@ -318,12 +318,14 @@ export default function LineageTab({ dataset }: LineageTabProps) {
         ) : (
           <div className="text-center py-12 text-gray-500">
             <div className="mb-4">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
               </svg>
             </div>
-            <p className="text-sm font-medium">No lineage information available</p>
-            <p className="text-xs text-gray-400 mt-1">This dataset has no upstream or downstream dependencies</p>
+            <h3 className="text-sm font-semibold text-gray-900">No lineage information available</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Register upstream and downstream dependencies via the lineage API to visualize data flow.
+            </p>
           </div>
         )}
       </div>

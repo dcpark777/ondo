@@ -91,6 +91,7 @@ class DatasetListItem(BaseModel):
     id: UUID
     full_name: str
     display_name: str
+    description: Optional[str] = None
     owner_name: Optional[str] = None
     readiness_score: int
     readiness_status: str
@@ -445,6 +446,77 @@ class GlossaryTermResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ColumnGlossaryTermResponse(BaseModel):
+    """Glossary term linked to a column (lightweight response)."""
+
+    term_id: UUID
+    term_name: str
+    term_definition: str
+    domain: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Schema change detection schemas
+class SchemaChangeResponse(BaseModel):
+    """Schema change detection result."""
+
+    id: UUID
+    dataset_id: UUID
+    change_type: str
+    column_name: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    detected_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SchemaSnapshotResponse(BaseModel):
+    """Schema snapshot summary."""
+
+    id: UUID
+    dataset_id: UUID
+    columns_hash: str
+    column_count: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SchemaSnapshotResult(BaseModel):
+    """Result of taking a schema snapshot."""
+
+    snapshot_id: UUID
+    changes_detected: int
+    changes: List[SchemaChangeResponse]
+
+
+# Audit log schemas
+class AuditLogResponse(BaseModel):
+    """Audit log entry response."""
+
+    id: UUID
+    dataset_id: Optional[UUID] = None
+    action: str
+    actor: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditLogListResponse(BaseModel):
+    """Response for audit log list endpoint."""
+
+    entries: List[AuditLogResponse]
+    total: int
 
 
 # Notification schemas

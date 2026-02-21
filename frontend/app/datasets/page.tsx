@@ -22,6 +22,10 @@ export default function DatasetsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkTagInput, setBulkTagInput] = useState('')
@@ -80,6 +84,8 @@ export default function DatasetsPage() {
       if (domainFilter.length > 0) params.domain = domainFilter.join(',')
       if (tagFilter.length > 0) params.tag = tagFilter.join(',')
       if (datasetFilter.length > 0) params.q = datasetFilter.join(',')
+      params.limit = pageSize
+      params.offset = (currentPage - 1) * pageSize
 
       const response = await listDatasets(params)
       setDatasets(response.datasets)
@@ -94,6 +100,11 @@ export default function DatasetsPage() {
 
   useEffect(() => {
     fetchDatasets()
+  }, [statusFilter, ownerFilter, locationFilter, classificationFilter, domainFilter, tagFilter, datasetFilter, currentPage, pageSize])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
   }, [statusFilter, ownerFilter, locationFilter, classificationFilter, domainFilter, tagFilter, datasetFilter])
 
   // Get unique owners from datasets
@@ -329,24 +340,24 @@ export default function DatasetsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Datasets</h1>
-        <p className="text-gray-600">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Datasets</h1>
+        <p className="text-gray-600 dark:text-gray-400">
           {total} {total === 1 ? 'dataset' : 'datasets'} found
         </p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
           {/* Status Filter */}
           <div className="relative" ref={statusDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Status
             </label>
             <button
               type="button"
               onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {statusFilter.length === 0
@@ -365,9 +376,9 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {statusDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={statusFilter.length === 0}
@@ -378,10 +389,10 @@ export default function DatasetsPage() {
                       }}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {['gold', 'production_ready', 'internal', 'draft'].map((status) => (
-                    <label key={status} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <label key={status} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={statusFilter.includes(status)}
@@ -394,7 +405,7 @@ export default function DatasetsPage() {
                         }}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                         {status === 'production_ready' ? 'Production Ready' : status.charAt(0).toUpperCase() + status.slice(1)}
                         {facets?.status[status] != null && <span className="text-gray-400 ml-1">({facets.status[status]})</span>}
                       </span>
@@ -407,13 +418,13 @@ export default function DatasetsPage() {
 
           {/* Owner Filter */}
           <div className="relative" ref={ownerDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Owner
             </label>
             <button
               type="button"
               onClick={() => setOwnerDropdownOpen(!ownerDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {ownerFilter.length === 0
@@ -432,19 +443,19 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {ownerDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                <div className="p-2 border-b border-gray-200">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="p-2 border-b border-gray-200 dark:border-gray-700">
             <input
               type="text"
                     value={ownerSearchQuery}
                     onChange={(e) => setOwnerSearchQuery(e.target.value)}
                     placeholder="Search owners..."
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={ownerFilter.length === 0}
@@ -455,13 +466,13 @@ export default function DatasetsPage() {
                       }}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {filteredOwners.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-gray-500">No owners found</div>
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No owners found</div>
                   ) : (
                     filteredOwners.map((owner) => (
-                      <label key={owner} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <label key={owner} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={ownerFilter.includes(owner)}
@@ -474,7 +485,7 @@ export default function DatasetsPage() {
                           }}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
-                        <span className="ml-2 text-sm text-gray-700">{owner}</span>
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{owner}</span>
                       </label>
                     ))
                   )}
@@ -485,13 +496,13 @@ export default function DatasetsPage() {
 
           {/* Location Filter */}
           <div className="relative" ref={locationDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Location
             </label>
             <button
               type="button"
               onClick={() => setLocationDropdownOpen(!locationDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {locationFilter.length === 0
@@ -510,9 +521,9 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {locationDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={locationFilter.length === 0}
@@ -523,10 +534,10 @@ export default function DatasetsPage() {
                       }}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {uniqueLocationTypes.map((locationType) => (
-                    <label key={locationType} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <label key={locationType} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={locationFilter.includes(locationType)}
@@ -539,7 +550,7 @@ export default function DatasetsPage() {
                         }}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">{getLocationLabel(locationType)}{facets?.location_type[locationType] != null && <span className="text-gray-400 ml-1">({facets.location_type[locationType]})</span>}</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{getLocationLabel(locationType)}{facets?.location_type[locationType] != null && <span className="text-gray-400 ml-1">({facets.location_type[locationType]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -549,13 +560,13 @@ export default function DatasetsPage() {
 
           {/* Classification Filter */}
           <div className="relative" ref={classificationDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Classification
             </label>
             <button
               type="button"
               onClick={() => setClassificationDropdownOpen(!classificationDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {classificationFilter.length === 0
@@ -574,16 +585,16 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {classificationDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input type="checkbox" checked={classificationFilter.length === 0} onChange={(e) => { if (e.target.checked) setClassificationFilter([]) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {['public', 'internal', 'confidential', 'restricted'].map((cls) => (
-                    <label key={cls} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <label key={cls} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                       <input type="checkbox" checked={classificationFilter.includes(cls)} onChange={(e) => { if (e.target.checked) setClassificationFilter([...classificationFilter, cls]); else setClassificationFilter(classificationFilter.filter(c => c !== cls)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                      <span className="ml-2 text-sm text-gray-700">{getClassificationLabel(cls)}{facets?.classification[cls] != null && <span className="text-gray-400 ml-1">({facets.classification[cls]})</span>}</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{getClassificationLabel(cls)}{facets?.classification[cls] != null && <span className="text-gray-400 ml-1">({facets.classification[cls]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -593,13 +604,13 @@ export default function DatasetsPage() {
 
           {/* Domain Filter */}
           <div className="relative" ref={domainDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Domain
             </label>
             <button
               type="button"
               onClick={() => setDomainDropdownOpen(!domainDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {domainFilter.length === 0
@@ -618,16 +629,16 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {domainDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input type="checkbox" checked={domainFilter.length === 0} onChange={(e) => { if (e.target.checked) setDomainFilter([]) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {uniqueDomains.map((d) => (
-                    <label key={d} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <label key={d} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                       <input type="checkbox" checked={domainFilter.includes(d)} onChange={(e) => { if (e.target.checked) setDomainFilter([...domainFilter, d]); else setDomainFilter(domainFilter.filter(x => x !== d)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                      <span className="ml-2 text-sm text-gray-700">{d}{facets?.domain[d] != null && <span className="text-gray-400 ml-1">({facets.domain[d]})</span>}</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{d}{facets?.domain[d] != null && <span className="text-gray-400 ml-1">({facets.domain[d]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -637,13 +648,13 @@ export default function DatasetsPage() {
 
           {/* Tag Filter */}
           <div className="relative" ref={tagDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Tags
             </label>
             <button
               type="button"
               onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {tagFilter.length === 0
@@ -662,16 +673,16 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {tagDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input type="checkbox" checked={tagFilter.length === 0} onChange={(e) => { if (e.target.checked) setTagFilter([]) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {uniqueTags.map((t) => (
-                    <label key={t} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <label key={t} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                       <input type="checkbox" checked={tagFilter.includes(t)} onChange={(e) => { if (e.target.checked) setTagFilter([...tagFilter, t]); else setTagFilter(tagFilter.filter(x => x !== t)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                      <span className="ml-2 text-sm text-gray-700">{t}{facets?.tags[t] != null && <span className="text-gray-400 ml-1">({facets.tags[t]})</span>}</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{t}{facets?.tags[t] != null && <span className="text-gray-400 ml-1">({facets.tags[t]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -681,13 +692,13 @@ export default function DatasetsPage() {
 
           {/* Dataset Search */}
           <div className="relative" ref={datasetDropdownRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Dataset
             </label>
             <button
               type="button"
               onClick={() => setDatasetDropdownOpen(!datasetDropdownOpen)}
-              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
             >
               <span className="text-sm text-gray-700">
                 {datasetFilter.length === 0
@@ -706,19 +717,19 @@ export default function DatasetsPage() {
               </svg>
             </button>
             {datasetDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                <div className="p-2 border-b border-gray-200">
+              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="p-2 border-b border-gray-200 dark:border-gray-700">
                   <input
                     type="text"
                     value={datasetSearchQuery}
                     onChange={(e) => setDatasetSearchQuery(e.target.value)}
                     placeholder="Search datasets..."
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
                 <div className="py-1">
-                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={datasetFilter.length === 0}
@@ -729,13 +740,13 @@ export default function DatasetsPage() {
                       }}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">All</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">All</span>
                   </label>
                   {filteredDatasets.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-gray-500">No datasets found</div>
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No datasets found</div>
                   ) : (
                     filteredDatasets.map((dataset) => (
-                      <label key={dataset} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <label key={dataset} className="flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={datasetFilter.includes(dataset)}
@@ -748,7 +759,7 @@ export default function DatasetsPage() {
                           }}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
-                        <span className="ml-2 text-sm text-gray-700">{dataset}</span>
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{dataset}</span>
                       </label>
                     ))
                   )}
@@ -762,11 +773,11 @@ export default function DatasetsPage() {
       {/* Bulk Action Toolbar */}
       {selectedIds.size > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <span className="text-sm font-medium text-blue-800">
               {selectedIds.size} dataset{selectedIds.size !== 1 ? 's' : ''} selected
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setBulkActionType('tags')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium ${
@@ -785,7 +796,7 @@ export default function DatasetsPage() {
               </button>
               <button
                 onClick={() => { setSelectedIds(new Set()); setBulkActionType(null) }}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800"
               >
                 Clear
               </button>
@@ -793,7 +804,7 @@ export default function DatasetsPage() {
           </div>
 
           {bulkActionType === 'tags' && (
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-2">
               <select
                 value={bulkTagMode}
                 onChange={e => setBulkTagMode(e.target.value as 'add' | 'remove' | 'replace')}
@@ -820,7 +831,7 @@ export default function DatasetsPage() {
           )}
 
           {bulkActionType === 'classification' && (
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-2">
               <select
                 value={bulkClassification}
                 onChange={e => setBulkClassification(e.target.value)}
@@ -867,10 +878,10 @@ export default function DatasetsPage() {
 
       {/* Table */}
       {!loading && !error && (
-        <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
                   <th className="px-3 py-3 w-10">
                     <input
@@ -881,7 +892,7 @@ export default function DatasetsPage() {
                     />
                   </th>
                   <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={() => handleSort('dataset')}
                   >
                     <div className="flex items-center">
@@ -890,7 +901,7 @@ export default function DatasetsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={() => handleSort('score')}
                   >
                     <div className="flex items-center">
@@ -899,7 +910,7 @@ export default function DatasetsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={() => handleSort('status')}
                   >
                     <div className="flex items-center">
@@ -908,7 +919,7 @@ export default function DatasetsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={() => handleSort('owner')}
                   >
                     <div className="flex items-center">
@@ -916,11 +927,11 @@ export default function DatasetsPage() {
                       {getSortIcon('owner')}
                     </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Tags
                   </th>
                   <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={() => handleSort('last_scored')}
                   >
                     <div className="flex items-center">
@@ -930,7 +941,7 @@ export default function DatasetsPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {sortedDatasets.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
@@ -941,7 +952,7 @@ export default function DatasetsPage() {
                   sortedDatasets.map((dataset) => (
                     <tr
                       key={dataset.id}
-                      className="hover:bg-gray-50"
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       <td className="px-3 py-4">
                         <input
@@ -951,16 +962,21 @@ export default function DatasetsPage() {
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4">
                         <Link
                           href={`/datasets/${dataset.id}`}
                           className="block hover:text-blue-600"
                         >
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
                               {dataset.display_name}
                             </div>
-                            <div className="text-sm text-gray-500">{dataset.full_name}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{dataset.full_name}</div>
+                            {dataset.description && (
+                              <div className="text-xs text-gray-400 mt-0.5 max-w-xs truncate">
+                                {dataset.description}
+                              </div>
+                            )}
                             {dataset.location_type && (
                               <div className="mt-1">
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${getLocationBadgeColor(dataset.location_type)}`}>
@@ -974,7 +990,7 @@ export default function DatasetsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="text-sm font-semibold text-gray-900">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                             {dataset.readiness_score}
                           </div>
                           <div className="ml-2 w-24 bg-gray-200 rounded-full h-2">
@@ -994,7 +1010,7 @@ export default function DatasetsPage() {
                           {getStatusLabel(dataset.readiness_status)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {dataset.owner_name || (
                           <span className="text-gray-400 italic">No owner</span>
                         )}
@@ -1015,7 +1031,7 @@ export default function DatasetsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {formatDate(dataset.last_scored_at)}
                       </td>
                     </tr>
@@ -1024,6 +1040,93 @@ export default function DatasetsPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {total > 0 && (() => {
+            const totalPages = Math.ceil(total / pageSize)
+            const startItem = (currentPage - 1) * pageSize + 1
+            const endItem = Math.min(currentPage * pageSize, total)
+
+            // Build page numbers to show
+            const getPageNumbers = (): (number | 'ellipsis')[] => {
+              const pages: (number | 'ellipsis')[] = []
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i)
+              } else {
+                pages.push(1)
+                if (currentPage > 3) pages.push('ellipsis')
+                const start = Math.max(2, currentPage - 1)
+                const end = Math.min(totalPages - 1, currentPage + 1)
+                for (let i = start; i <= end; i++) pages.push(i)
+                if (currentPage < totalPages - 2) pages.push('ellipsis')
+                pages.push(totalPages)
+              }
+              return pages
+            }
+
+            return (
+              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Showing {startItem}-{endItem} of {total} datasets
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="pageSize" className="text-sm text-gray-600 dark:text-gray-400">
+                      Page size:
+                    </label>
+                    <select
+                      id="pageSize"
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value))
+                        setCurrentPage(1)
+                      }}
+                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  {getPageNumbers().map((page, idx) =>
+                    page === 'ellipsis' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md border ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

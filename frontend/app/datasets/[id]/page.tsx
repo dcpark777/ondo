@@ -13,6 +13,7 @@ import {
   applyColumnDescriptions,
   DatasetDetail,
   DatasetDescriptionRequest,
+  ScoreHistory,
 } from '../../api/client'
 import DatasetContent from './components/DatasetContent'
 
@@ -43,24 +44,24 @@ export default function DatasetDetailPage() {
   const [applyingColumns, setApplyingColumns] = useState(false)
 
   // Tab state - read from URL on mount
-  const validTabs: Array<'overview' | 'score' | 'schema' | 'lineage'> = ['overview', 'score', 'schema', 'lineage']
+  const validTabs: Array<'overview' | 'score' | 'schema' | 'lineage' | 'details'> = ['overview', 'score', 'schema', 'lineage', 'details']
   
   // Get initial tab from URL
-  const getTabFromUrl = (): 'overview' | 'score' | 'schema' | 'lineage' => {
+  const getTabFromUrl = (): 'overview' | 'score' | 'schema' | 'lineage' | 'details' => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const tab = params.get('tab')
       if (tab && validTabs.includes(tab as any)) {
-        return tab as 'overview' | 'score' | 'schema' | 'lineage'
+        return tab as 'overview' | 'score' | 'schema' | 'lineage' | 'details'
       }
     }
     return 'overview'
   }
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'schema' | 'lineage'>(getTabFromUrl())
+  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'schema' | 'lineage' | 'details'>(getTabFromUrl())
 
   // Update URL when tab changes
-  const handleTabChange = (tab: 'overview' | 'score' | 'schema' | 'lineage') => {
+  const handleTabChange = (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'details') => {
     setActiveTab(tab)
     const params = new URLSearchParams(window.location.search)
     if (tab === 'overview') {
@@ -251,48 +252,6 @@ export default function DatasetDetailPage() {
     }
   }
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'gold':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'production_ready':
-        return 'bg-green-100 text-green-800'
-      case 'internal':
-        return 'bg-blue-100 text-blue-800'
-      case 'draft':
-        return 'bg-gray-100 text-gray-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'gold':
-        return 'Gold'
-      case 'production_ready':
-        return 'Production Ready'
-      case 'internal':
-        return 'Internal'
-      case 'draft':
-        return 'Draft'
-      default:
-        return status
-    }
-  }
-
-  const getDimensionLabel = (key: string) => {
-    const labels: Record<string, string> = {
-      ownership: 'Ownership & Accountability',
-      documentation: 'Documentation Quality',
-      schema_hygiene: 'Schema Hygiene',
-      data_quality: 'Data Quality Signals',
-      stability: 'Stability & Change Management',
-      operational: 'Operational Metadata',
-    }
-    return labels[key] || key
-  }
-
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -322,7 +281,7 @@ export default function DatasetDetailPage() {
 
   // Prepare score history for chart (last 30 entries, sorted by date)
   const scoreHistory = dataset.score_history;
-  const historyData = scoreHistory ? scoreHistory.slice(-30) : [];
+  const historyData: ScoreHistory[] = scoreHistory ? scoreHistory.slice(-30) : [];
   const maxScore = 100;
   const minScore = 0;
 
@@ -334,9 +293,6 @@ export default function DatasetDetailPage() {
       historyData={historyData}
       maxScore={maxScore}
       minScore={minScore}
-      getStatusBadgeClass={getStatusBadgeClass}
-      getStatusLabel={getStatusLabel}
-      getDimensionLabel={getDimensionLabel}
       isEditingOwner={isEditingOwner}
       isEditingMetadata={isEditingMetadata}
       ownerName={ownerName}

@@ -4,23 +4,30 @@ AI assist endpoints for generating dataset and column descriptions.
 Safety: Only uses metadata, never raw data values.
 """
 
+import logging
 from typing import Dict, List, Optional
+from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.response_builder import build_dataset_detail_response
 from app.api.schemas import DatasetDetailResponse
 from app.config import settings
 from app.db import get_db
-from app.models import ReadinessStatusEnum
+from app.models import Dataset, DatasetColumn
+from app.services.dataset_metadata import build_metadata_from_dataset
+from app.services.scoring_service import score_and_save_dataset
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 class DatasetDescriptionRequest(BaseModel):
     """Request for dataset description generation.
-    
+
     Safety: Only uses metadata (table/column names), never raw data values.
     """
 
@@ -40,7 +47,7 @@ class DatasetDescriptionResponse(BaseModel):
 
 class ColumnDescriptionsRequest(BaseModel):
     """Request for column descriptions generation.
-    
+
     Safety: Only uses metadata (column names), never raw data values.
     """
 
@@ -210,6 +217,7 @@ def generate_dataset_description(
             detail="AI assist is not enabled. Set AI_ASSIST_ENABLED=true to enable.",
         )
 
+    logger.info("Generating dataset description for %s", request.full_name)
     suggested = _generate_dataset_description(request)
 
     return DatasetDescriptionResponse(suggested_description=suggested)
@@ -233,6 +241,7 @@ def generate_column_descriptions(
             detail="AI assist is not enabled. Set AI_ASSIST_ENABLED=true to enable.",
         )
 
+    logger.info("Generating column descriptions for %s (%d columns)", request.dataset_name, len(request.column_names))
     suggested = _generate_column_descriptions(request)
 
     return ColumnDescriptionsResponse(suggested_descriptions=suggested)
@@ -268,11 +277,6 @@ def apply_dataset_description(
             detail="AI assist is not enabled. Set AI_ASSIST_ENABLED=true to enable.",
         )
 
-    from uuid import UUID
-    from app.models import Dataset, DatasetColumn, ReadinessStatusEnum
-    from app.services.dataset_metadata import build_metadata_from_dataset
-    from app.services.scoring_service import score_and_save_dataset
-
     try:
         dataset_id = UUID(request.dataset_id)
     except ValueError:
@@ -285,8 +289,7 @@ def apply_dataset_description(
     # Update description
     dataset.description = request.description
 
-    # Build metadata for rescoring (columns from previous scoring if available)
-    # In a real system, we'd fetch column metadata from a separate table
+    # Build metadata for rescoring
     metadata = build_metadata_from_dataset(dataset, columns=[])
 
     # Rescore the dataset
@@ -295,107 +298,7 @@ def apply_dataset_description(
     db.commit()
     db.refresh(dataset)
 
-    # Return updated dataset detail - build response directly to avoid circular dependency
-    from app.api.datasets import (
-        _action_to_response,
-        _column_to_response,
-        _dimension_score_to_response,
-        _reason_to_response,
-        _score_history_to_response,
-    )
-    from app.models import (
-        DatasetAction,
-        DatasetDimensionScore,
-        DatasetReason,
-        DatasetScoreHistory,
-    )
-
-    # Get related data
-    columns = (
-        db.query(DatasetColumn)
-        .filter(DatasetColumn.dataset_id == dataset_id)
-        .order_by(DatasetColumn.name)
-        .all()
-    )
-    dimension_scores = (
-        db.query(DatasetDimensionScore)
-        .filter(DatasetDimensionScore.dataset_id == dataset_id)
-        .order_by(DatasetDimensionScore.dimension_key)
-        .all()
-    )
-    reasons = (
-        db.query(DatasetReason)
-        .filter(DatasetReason.dataset_id == dataset_id)
-        .order_by(DatasetReason.dimension_key, DatasetReason.points_lost.desc())
-        .all()
-    )
-    actions = (
-        db.query(DatasetAction)
-        .filter(DatasetAction.dataset_id == dataset_id)
-        .order_by(DatasetAction.points_gain.desc())
-        .all()
-    )
-    score_history = (
-        db.query(DatasetScoreHistory)
-        .filter(DatasetScoreHistory.dataset_id == dataset_id)
-        .order_by(DatasetScoreHistory.recorded_at.desc())
-        .limit(30)
-        .all()
-    )
-
-    # Filter reasons/actions for measured dimensions
-    dimension_scores_dict = {
-        ds.dimension_key.lower(): bool(ds.measured) if hasattr(ds, "measured") else True
-        for ds in dimension_scores
-    }
-    reasons = [r for r in reasons if dimension_scores_dict.get(r.dimension_key.lower(), True)]
-    
-    # Helper to map action_key to dimension_key
-    from app.scoring.constants import ActionKey
-    def get_dimension_key_from_action_key(action_key: str) -> Optional[str]:
-        mapping = {
-            ActionKey.ASSIGN_OWNER: "ownership",
-            ActionKey.ADD_OWNER_CONTACT: "ownership",
-            ActionKey.ADD_DESCRIPTION: "documentation",
-            ActionKey.DOCUMENT_COLUMNS: "documentation",
-            ActionKey.FIX_NAMING: "schema_hygiene",
-            ActionKey.REDUCE_NULLABLE_COLUMNS: "schema_hygiene",
-            ActionKey.REMOVE_LEGACY_COLUMNS: "schema_hygiene",
-            ActionKey.ADD_QUALITY_CHECKS: "data_quality",
-            ActionKey.DEFINE_SLA: "data_quality",
-            ActionKey.RESOLVE_FAILURES: "data_quality",
-            ActionKey.PREVENT_BREAKING_CHANGES: "stability",
-            ActionKey.ADD_CHANGELOG: "stability",
-            ActionKey.MAINTAIN_COMPATIBILITY: "stability",
-            ActionKey.DEFINE_INTENDED_USE: "operational",
-            ActionKey.DOCUMENT_LIMITATIONS: "operational",
-        }
-        return mapping.get(action_key)
-    
-    actions = [
-        a for a in actions
-        if dimension_scores_dict.get(get_dimension_key_from_action_key(a.action_key) or "", True)
-    ]
-
-    return DatasetDetailResponse(
-        id=dataset.id,
-        full_name=dataset.full_name,
-        display_name=dataset.display_name,
-        description=dataset.description if hasattr(dataset, "description") else None,
-        owner_name=dataset.owner_name,
-        owner_contact=dataset.owner_contact,
-        intended_use=dataset.intended_use,
-        limitations=dataset.limitations,
-        last_seen_at=dataset.last_seen_at,
-        last_scored_at=dataset.last_scored_at,
-        readiness_score=dataset.readiness_score,
-        readiness_status=dataset.readiness_status.value if isinstance(dataset.readiness_status, ReadinessStatusEnum) else str(dataset.readiness_status),
-        dimension_scores=[_dimension_score_to_response(ds) for ds in dimension_scores],
-        reasons=[_reason_to_response(r) for r in reasons],
-        actions=[_action_to_response(a) for a in actions],
-        columns=[_column_to_response(c) for c in columns],
-        score_history=[_score_history_to_response(h) for h in score_history],
-    )
+    return build_dataset_detail_response(db, dataset_id)
 
 
 @router.post("/apply-column-descriptions", response_model=DatasetDetailResponse)
@@ -413,11 +316,6 @@ def apply_column_descriptions(
             status_code=403,
             detail="AI assist is not enabled. Set AI_ASSIST_ENABLED=true to enable.",
         )
-
-    from uuid import UUID
-    from app.models import Dataset
-    from app.services.dataset_metadata import build_metadata_from_dataset
-    from app.services.scoring_service import score_and_save_dataset
 
     try:
         dataset_id = UUID(request.dataset_id)
@@ -443,106 +341,4 @@ def apply_column_descriptions(
     db.commit()
     db.refresh(dataset)
 
-    # Return updated dataset detail - build response directly to avoid circular dependency
-    from app.api.datasets import (
-        _action_to_response,
-        _column_to_response,
-        _dimension_score_to_response,
-        _reason_to_response,
-        _score_history_to_response,
-    )
-    from app.models import (
-        DatasetAction,
-        DatasetDimensionScore,
-        DatasetReason,
-        DatasetScoreHistory,
-        ReadinessStatusEnum,
-    )
-
-    # Get related data
-    columns = (
-        db.query(DatasetColumn)
-        .filter(DatasetColumn.dataset_id == dataset_id)
-        .order_by(DatasetColumn.name)
-        .all()
-    )
-    dimension_scores = (
-        db.query(DatasetDimensionScore)
-        .filter(DatasetDimensionScore.dataset_id == dataset_id)
-        .order_by(DatasetDimensionScore.dimension_key)
-        .all()
-    )
-    reasons = (
-        db.query(DatasetReason)
-        .filter(DatasetReason.dataset_id == dataset_id)
-        .order_by(DatasetReason.dimension_key, DatasetReason.points_lost.desc())
-        .all()
-    )
-    actions = (
-        db.query(DatasetAction)
-        .filter(DatasetAction.dataset_id == dataset_id)
-        .order_by(DatasetAction.points_gain.desc())
-        .all()
-    )
-    score_history = (
-        db.query(DatasetScoreHistory)
-        .filter(DatasetScoreHistory.dataset_id == dataset_id)
-        .order_by(DatasetScoreHistory.recorded_at.desc())
-        .limit(30)
-        .all()
-    )
-
-    # Filter reasons/actions for measured dimensions
-    dimension_scores_dict = {
-        ds.dimension_key.lower(): bool(ds.measured) if hasattr(ds, "measured") else True
-        for ds in dimension_scores
-    }
-    reasons = [r for r in reasons if dimension_scores_dict.get(r.dimension_key.lower(), True)]
-    
-    # Helper to map action_key to dimension_key
-    from app.scoring.constants import ActionKey
-    def get_dimension_key_from_action_key(action_key: str) -> Optional[str]:
-        mapping = {
-            ActionKey.ASSIGN_OWNER: "ownership",
-            ActionKey.ADD_OWNER_CONTACT: "ownership",
-            ActionKey.ADD_DESCRIPTION: "documentation",
-            ActionKey.DOCUMENT_COLUMNS: "documentation",
-            ActionKey.FIX_NAMING: "schema_hygiene",
-            ActionKey.REDUCE_NULLABLE_COLUMNS: "schema_hygiene",
-            ActionKey.REMOVE_LEGACY_COLUMNS: "schema_hygiene",
-            ActionKey.ADD_QUALITY_CHECKS: "data_quality",
-            ActionKey.DEFINE_SLA: "data_quality",
-            ActionKey.RESOLVE_FAILURES: "data_quality",
-            ActionKey.PREVENT_BREAKING_CHANGES: "stability",
-            ActionKey.ADD_CHANGELOG: "stability",
-            ActionKey.MAINTAIN_COMPATIBILITY: "stability",
-            ActionKey.DEFINE_INTENDED_USE: "operational",
-            ActionKey.DOCUMENT_LIMITATIONS: "operational",
-        }
-        return mapping.get(action_key)
-    
-    actions = [
-        a for a in actions
-        if dimension_scores_dict.get(get_dimension_key_from_action_key(a.action_key) or "", True)
-    ]
-
-    return DatasetDetailResponse(
-        id=dataset.id,
-        full_name=dataset.full_name,
-        display_name=dataset.display_name,
-        description=dataset.description if hasattr(dataset, "description") else None,
-        owner_name=dataset.owner_name,
-        owner_contact=dataset.owner_contact,
-        intended_use=dataset.intended_use,
-        limitations=dataset.limitations,
-        last_seen_at=dataset.last_seen_at,
-        last_scored_at=dataset.last_scored_at,
-        readiness_score=dataset.readiness_score,
-        readiness_status=dataset.readiness_status.value if isinstance(dataset.readiness_status, ReadinessStatusEnum) else str(dataset.readiness_status),
-        dimension_scores=[_dimension_score_to_response(ds) for ds in dimension_scores],
-        reasons=[_reason_to_response(r) for r in reasons],
-        actions=[_action_to_response(a) for a in actions],
-        columns=[_column_to_response(c) for c in columns],
-        score_history=[_score_history_to_response(h) for h in score_history],
-    )
-
+    return build_dataset_detail_response(db, dataset_id)

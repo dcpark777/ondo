@@ -2,8 +2,11 @@
 Service for scoring datasets and persisting results.
 """
 
+import logging
 from datetime import datetime
 from typing import Dict
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 
@@ -37,6 +40,7 @@ def score_and_save_dataset(
         Updated dataset with score and status
     """
     # Score the dataset
+    logger.info("Scoring dataset %s", dataset.id)
     score_result = score_dataset(metadata)
 
     # Update dataset with score
@@ -109,5 +113,6 @@ def score_and_save_dataset(
     )
     db.add(history)
 
+    logger.info("Dataset %s scored: %d (%s)", dataset.id, score_result.total_score, score_result.status.value)
     return dataset
 

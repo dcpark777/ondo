@@ -3,6 +3,13 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { listDatasets, DatasetListItem, ListDatasetsParams } from '../api/client'
+import {
+  getStatusBadgeClass,
+  getStatusLabel,
+  getLocationIcon,
+  getLocationLabel,
+  getLocationBadgeColor,
+} from '../lib/dataset-utils'
 
 type SortField = 'dataset' | 'score' | 'status' | 'owner' | 'last_scored'
 type SortDirection = 'asc' | 'desc'
@@ -16,9 +23,18 @@ export default function DatasetsPage() {
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
-  const [ownerFilter, setOwnerFilter] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [ownerFilter, setOwnerFilter] = useState<string[]>([])
+  const [ownerDropdownOpen, setOwnerDropdownOpen] = useState(false)
+  const [ownerSearchQuery, setOwnerSearchQuery] = useState<string>('')
+  const [locationFilter, setLocationFilter] = useState<string[]>([])
+  const [locationDropdownOpen, setLocationDropdownOpen] = useState(false)
+  const [datasetFilter, setDatasetFilter] = useState<string[]>([])
+  const [datasetDropdownOpen, setDatasetDropdownOpen] = useState(false)
+  const [datasetSearchQuery, setDatasetSearchQuery] = useState<string>('')
   const statusDropdownRef = useRef<HTMLDivElement>(null)
+  const ownerDropdownRef = useRef<HTMLDivElement>(null)
+  const locationDropdownRef = useRef<HTMLDivElement>(null)
+  const datasetDropdownRef = useRef<HTMLDivElement>(null)
   
   // Sort state
   const [sortField, setSortField] = useState<SortField | null>(null)
@@ -32,8 +48,9 @@ export default function DatasetsPage() {
     try {
       const params: ListDatasetsParams = {}
       if (statusFilter.length > 0) params.status = statusFilter.join(',')
-      if (ownerFilter) params.owner = ownerFilter
-      if (searchQuery) params.q = searchQuery
+      if (ownerFilter.length > 0) params.owner = ownerFilter.join(',')
+      if (locationFilter.length > 0) params.location_type = locationFilter.join(',')
+      if (datasetFilter.length > 0) params.q = datasetFilter.join(',')
 
       const response = await listDatasets(params)
       setDatasets(response.datasets)
@@ -48,13 +65,56 @@ export default function DatasetsPage() {
 
   useEffect(() => {
     fetchDatasets()
-  }, [statusFilter, ownerFilter, searchQuery])
+  }, [statusFilter, ownerFilter, locationFilter, datasetFilter])
 
-  // Close dropdown when clicking outside
+  // Get unique owners from datasets
+  const uniqueOwners = Array.from(
+    new Set(datasets.map(d => d.owner_name).filter((name): name is string => Boolean(name)))
+  ).sort()
+  
+  // Get unique location types from datasets
+  const uniqueLocationTypes = Array.from(
+    new Set(datasets.map(d => d.location_type).filter((type): type is string => Boolean(type)))
+  ).sort()
+
+  // Filter owners based on search query
+  const filteredOwners = ownerSearchQuery
+    ? uniqueOwners.filter(owner => owner.toLowerCase().includes(ownerSearchQuery.toLowerCase()))
+    : uniqueOwners
+
+  // Get unique dataset names (display_name and full_name) for search
+  const uniqueDatasets = Array.from(
+    new Set(
+      datasets.flatMap(d => [
+        d.display_name,
+        d.full_name
+      ]).filter(Boolean)
+    )
+  ).sort()
+
+  // Filter datasets based on search query
+  const filteredDatasets = datasetSearchQuery
+    ? uniqueDatasets.filter(dataset => 
+        dataset.toLowerCase().includes(datasetSearchQuery.toLowerCase())
+      )
+    : uniqueDatasets
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
         setStatusDropdownOpen(false)
+      }
+      if (ownerDropdownRef.current && !ownerDropdownRef.current.contains(event.target as Node)) {
+        setOwnerDropdownOpen(false)
+        setOwnerSearchQuery('')
+      }
+      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
+        setLocationDropdownOpen(false)
+      }
+      if (datasetDropdownRef.current && !datasetDropdownRef.current.contains(event.target as Node)) {
+        setDatasetDropdownOpen(false)
+        setDatasetSearchQuery('')
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -134,36 +194,6 @@ export default function DatasetsPage() {
     )
   }
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'gold':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'production_ready':
-        return 'bg-green-100 text-green-800'
-      case 'internal':
-        return 'bg-blue-100 text-blue-800'
-      case 'draft':
-        return 'bg-gray-100 text-gray-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'gold':
-        return 'Gold'
-      case 'production_ready':
-        return 'Production Ready'
-      case 'internal':
-        return 'Internal'
-      case 'draft':
-        return 'Draft'
-      default:
-        return status
-    }
-  }
-
   const getScoreBarColor = (status: string) => {
     switch (status) {
       case 'gold':
@@ -175,102 +205,6 @@ export default function DatasetsPage() {
         return 'bg-red-500'
       default:
         return 'bg-blue-500'
-    }
-  }
-
-  const getLocationIcon = (locationType: string | null) => {
-    if (!locationType) return null
-    
-    const type = locationType.toLowerCase()
-    const iconClass = "w-4 h-4"
-    
-    switch (type) {
-      case 's3':
-        // AWS S3 bucket icon
-        return (
-          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.64l-8 4.18-8-4.18V6.18l8-4z"/>
-            <path d="M12 8L6 11v6l6 3 6-3v-6l-6-3zm0 2.18l3.5 1.75v3.14L12 16.82l-3.5-1.75v-3.14L12 10.18z"/>
-          </svg>
-        )
-      case 'snowflake':
-        // Snowflake logo - simplified snowflake pattern
-        return (
-          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2l-2 2 2 2-2 2 2 2-2 2 2 2v4l-2-2-2 2-2-2-2 2-2-2v-4l2-2-2-2 2-2-2-2 2-2-2-2 2-2h4l-2 2 2-2 2 2 2-2 2 2zm0 2.83L9.17 8 12 10.83 14.83 8 12 4.83z"/>
-            <circle cx="12" cy="12" r="1.5"/>
-          </svg>
-        )
-      case 'databricks':
-        // Databricks Unity Catalog logo - triangle pattern
-        return (
-          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 0L0 6.93v10.14L12 24l12-6.93V6.93L12 0zm0 2.31l9.23 5.33v8.72L12 21.69l-9.23-5.33V7.64L12 2.31z"/>
-            <path d="M12 4.62L6.31 7.93v8.14L12 19.38l5.69-3.31V7.93L12 4.62zm0 2.31l3.46 2v4.14L12 15.38l-3.46-2.31V9.23L12 6.93z"/>
-          </svg>
-        )
-      case 'bigquery':
-        // Google BigQuery logo - simplified
-        return (
-          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            <path d="M12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
-          </svg>
-        )
-      case 'hive':
-        // Apache Hive logo - hexagon/beehive pattern
-        return (
-          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.83l7.5 3.75v7.5L12 19.17l-7.5-3.75v-7.5L12 4.83z"/>
-            <path d="M12 7.5L8.5 9.5v5L12 16.5l3.5-2v-5L12 7.5zm0 2.25l1.75.875v2.25L12 13.75l-1.75-.875v-2.25L12 9.75z"/>
-          </svg>
-        )
-      default:
-        return (
-          <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-          </svg>
-        )
-    }
-  }
-
-  const getLocationLabel = (locationType: string | null) => {
-    if (!locationType) return ''
-    
-    const type = locationType.toLowerCase()
-    switch (type) {
-      case 's3':
-        return 'S3'
-      case 'snowflake':
-        return 'Snowflake'
-      case 'databricks':
-        return 'Databricks'
-      case 'bigquery':
-        return 'BigQuery'
-      case 'hive':
-        return 'Hive'
-      default:
-        return type.charAt(0).toUpperCase() + type.slice(1)
-    }
-  }
-
-  const getLocationBadgeColor = (locationType: string | null) => {
-    if (!locationType) return 'bg-gray-100 text-gray-600'
-    
-    const type = locationType.toLowerCase()
-    switch (type) {
-      case 's3':
-        return 'bg-orange-100 text-orange-700'
-      case 'snowflake':
-        return 'bg-blue-100 text-blue-700'
-      case 'databricks':
-        return 'bg-purple-100 text-purple-700'
-      case 'bigquery':
-        return 'bg-yellow-100 text-yellow-700'
-      case 'hive':
-        return 'bg-green-100 text-green-700'
-      default:
-        return 'bg-gray-100 text-gray-600'
     }
   }
 
@@ -297,7 +231,7 @@ export default function DatasetsPage() {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Status Filter */}
           <div className="relative" ref={statusDropdownRef}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -365,39 +299,223 @@ export default function DatasetsPage() {
           </div>
 
           {/* Owner Filter */}
-          <div>
-            <label
-              htmlFor="owner-filter"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+          <div className="relative" ref={ownerDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Owner
             </label>
+            <button
+              type="button"
+              onClick={() => setOwnerDropdownOpen(!ownerDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-700">
+                {ownerFilter.length === 0
+                  ? 'All'
+                  : ownerFilter.length === 1
+                  ? ownerFilter[0]
+                  : `${ownerFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${ownerDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {ownerDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="p-2 border-b border-gray-200">
             <input
-              id="owner-filter"
               type="text"
-              value={ownerFilter}
-              onChange={(e) => setOwnerFilter(e.target.value)}
-              placeholder="Filter by owner..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
+                    value={ownerSearchQuery}
+                    onChange={(e) => setOwnerSearchQuery(e.target.value)}
+                    placeholder="Search owners..."
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ownerFilter.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setOwnerFilter([])
+                        }
+                      }}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {filteredOwners.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">No owners found</div>
+                  ) : (
+                    filteredOwners.map((owner) => (
+                      <label key={owner} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={ownerFilter.includes(owner)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setOwnerFilter([...ownerFilter, owner])
+                            } else {
+                              setOwnerFilter(ownerFilter.filter(o => o !== owner))
+                            }
+                          }}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">{owner}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Search */}
-          <div>
-            <label
-              htmlFor="search"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Search
+          {/* Location Filter */}
+          <div className="relative" ref={locationDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Location
             </label>
-            <input
-              id="search"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search datasets..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
+            <button
+              type="button"
+              onClick={() => setLocationDropdownOpen(!locationDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-700">
+                {locationFilter.length === 0
+                  ? 'All'
+                  : locationFilter.length === 1
+                  ? getLocationLabel(locationFilter[0])
+                  : `${locationFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${locationDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {locationDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={locationFilter.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setLocationFilter([])
+                        }
+                      }}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {uniqueLocationTypes.map((locationType) => (
+                    <label key={locationType} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={locationFilter.includes(locationType)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setLocationFilter([...locationFilter, locationType])
+                          } else {
+                            setLocationFilter(locationFilter.filter(l => l !== locationType))
+                          }
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">{getLocationLabel(locationType)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Dataset Search */}
+          <div className="relative" ref={datasetDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Dataset
+            </label>
+            <button
+              type="button"
+              onClick={() => setDatasetDropdownOpen(!datasetDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-700">
+                {datasetFilter.length === 0
+                  ? 'All'
+                  : datasetFilter.length === 1
+                  ? datasetFilter[0]
+                  : `${datasetFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${datasetDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {datasetDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="p-2 border-b border-gray-200">
+                  <input
+                    type="text"
+                    value={datasetSearchQuery}
+                    onChange={(e) => setDatasetSearchQuery(e.target.value)}
+                    placeholder="Search datasets..."
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={datasetFilter.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setDatasetFilter([])
+                        }
+                      }}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {filteredDatasets.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">No datasets found</div>
+                  ) : (
+                    filteredDatasets.map((dataset) => (
+                      <label key={dataset} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={datasetFilter.includes(dataset)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDatasetFilter([...datasetFilter, dataset])
+                            } else {
+                              setDatasetFilter(datasetFilter.filter(d => d !== dataset))
+                            }
+                          }}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">{dataset}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -429,7 +547,7 @@ export default function DatasetsPage() {
                     onClick={() => handleSort('dataset')}
                   >
                     <div className="flex items-center">
-                      Dataset
+                    Dataset
                       {getSortIcon('dataset')}
                     </div>
                   </th>
@@ -438,7 +556,7 @@ export default function DatasetsPage() {
                     onClick={() => handleSort('score')}
                   >
                     <div className="flex items-center">
-                      Score
+                    Score
                       {getSortIcon('score')}
                     </div>
                   </th>
@@ -447,7 +565,7 @@ export default function DatasetsPage() {
                     onClick={() => handleSort('status')}
                   >
                     <div className="flex items-center">
-                      Status
+                    Status
                       {getSortIcon('status')}
                     </div>
                   </th>
@@ -456,7 +574,7 @@ export default function DatasetsPage() {
                     onClick={() => handleSort('owner')}
                   >
                     <div className="flex items-center">
-                      Owner
+                    Owner
                       {getSortIcon('owner')}
                     </div>
                   </th>
@@ -465,7 +583,7 @@ export default function DatasetsPage() {
                     onClick={() => handleSort('last_scored')}
                   >
                     <div className="flex items-center">
-                      Last Scored
+                    Last Scored
                       {getSortIcon('last_scored')}
                     </div>
                   </th>

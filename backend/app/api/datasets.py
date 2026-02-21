@@ -2,40 +2,34 @@
 Dataset API endpoints.
 """
 
+import logging
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
+logger = logging.getLogger(__name__)
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
+
+from app.api.response_builder import build_dataset_detail_response, column_to_response
 from app.api.schemas import (
-    ActionResponse,
-    ColumnResponse,
+    ColumnLineageItem,
+    ColumnLineageResponse,
     DatasetDetailResponse,
+    DatasetLineageItem,
+    DatasetLineageResponse,
     DatasetListItem,
     DatasetListResponse,
-    DimensionScoreResponse,
-    ReasonResponse,
-    ScoreHistoryResponse,
     UpdateMetadataRequest,
     UpdateOwnerRequest,
-    DatasetLineageResponse,
-    ColumnLineageResponse,
-    DatasetLineageItem,
-    ColumnLineageItem,
 )
 from app.db import get_db
 from app.models import (
-    Dataset,
-    DatasetAction,
-    DatasetColumn,
-    DatasetDimensionScore,
-    DatasetReason,
-    DatasetScoreHistory,
-    DatasetLineage,
     ColumnLineage,
-    DimensionKeyEnum,
+    Dataset,
+    DatasetColumn,
+    DatasetLineage,
     ReadinessStatusEnum,
 )
 from app.services.dataset_metadata import build_metadata_from_dataset
@@ -43,91 +37,18 @@ from app.services.scoring_service import score_and_save_dataset
 from app.services.schema_generator import (
     columns_to_avro_schema,
     generate_protobuf_schema,
-    generate_scala_schema,
     generate_python_schema,
+    generate_scala_schema,
 )
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
 
-def _dimension_score_to_response(dim_score: DatasetDimensionScore) -> DimensionScoreResponse:
-    """Convert dimension score model to response schema.
-    
-    Contract v1: Returns stable shape with measured flag.
-    """
-    # dimension_key is stored as string, convert to value if it's an enum
-    dimension_key_value = (
-        dim_score.dimension_key.value
-        if isinstance(dim_score.dimension_key, DimensionKeyEnum)
-        else str(dim_score.dimension_key)
-    )
-    # Convert measured from integer (1/0) to boolean
-    measured = bool(dim_score.measured) if hasattr(dim_score, "measured") else True
-    return DimensionScoreResponse(
-        dimension_key=dimension_key_value,
-        points_awarded=dim_score.points_awarded,
-        max_points=dim_score.max_points,
-        measured=measured,
-        percentage=(dim_score.points_awarded / dim_score.max_points * 100)
-        if dim_score.max_points > 0
-        else 0.0,
-    )
-
-
-def _reason_to_response(reason: DatasetReason) -> ReasonResponse:
-    """Convert reason model to response schema."""
-    # dimension_key is stored as string, convert to value if it's an enum
-    dimension_key_value = (
-        reason.dimension_key.value
-        if isinstance(reason.dimension_key, DimensionKeyEnum)
-        else str(reason.dimension_key)
-    )
-    return ReasonResponse(
-        id=reason.id,
-        dimension_key=dimension_key_value,
-        reason_code=reason.reason_code,
-        message=reason.message,
-        points_lost=reason.points_lost,
-    )
-
-
-def _action_to_response(action: DatasetAction) -> ActionResponse:
-    """Convert action model to response schema."""
-    return ActionResponse(
-        id=action.id,
-        action_key=action.action_key,
-        title=action.title,
-        description=action.description,
-        points_gain=action.points_gain,
-        url=action.url,
-    )
-
-
-def _column_to_response(column: DatasetColumn) -> ColumnResponse:
-    """Convert column model to response schema."""
-    return ColumnResponse(
-        id=column.id,
-        name=column.name,
-        description=column.description,
-        type=column.type,
-        nullable=bool(column.nullable) if column.nullable is not None else None,
-    )
-
-
-def _score_history_to_response(history: DatasetScoreHistory) -> ScoreHistoryResponse:
-    """Convert score history model to response schema."""
-    return ScoreHistoryResponse(
-        id=history.id,
-        readiness_score=history.readiness_score,
-        recorded_at=history.recorded_at,
-        scoring_version=history.scoring_version,
-    )
-
-
 @router.get("", response_model=DatasetListResponse)
 def list_datasets(
     status: Optional[str] = Query(None, description="Filter by readiness status (comma-separated for multiple)"),
-    owner: Optional[str] = Query(None, description="Filter by owner name"),
+    owner: Optional[str] = Query(None, description="Filter by owner name (comma-separated for multiple)"),
+    location_type: Optional[str] = Query(None, description="Filter by location type (comma-separated for multiple)"),
     q: Optional[str] = Query(None, description="Search in full_name and display_name"),
     db: Session = Depends(get_db),
 ):
@@ -136,7 +57,8 @@ def list_datasets(
 
     Query parameters:
     - status: Filter by readiness status (comma-separated: draft, internal, production_ready, gold)
-    - owner: Filter by owner name
+    - owner: Filter by owner name (comma-separated for multiple)
+    - location_type: Filter by location type (comma-separated: s3, snowflake, databricks, bigquery, hive)
     - q: Search query for full_name and display_name
     """
     query = db.query(Dataset)
@@ -153,17 +75,35 @@ def list_datasets(
             )
         query = query.filter(Dataset.readiness_status.in_(status_list))
 
-    # Filter by owner
+    # Filter by owner (supports multiple comma-separated values)
     if owner:
-        query = query.filter(Dataset.owner_name.ilike(f"%{owner}%"))
+        owner_list = [o.strip() for o in owner.split(",")]
+        query = query.filter(Dataset.owner_name.in_(owner_list))
 
-    # Search query
+    # Filter by location type (supports multiple comma-separated values)
+    if location_type:
+        location_list = [l.strip().lower() for l in location_type.split(",")]
+        query = query.filter(Dataset.location_type.in_(location_list))
+
+    # Search query (supports comma-separated dataset names for exact matching)
     if q:
-        search_filter = or_(
-            Dataset.full_name.ilike(f"%{q}%"),
-            Dataset.display_name.ilike(f"%{q}%"),
-        )
-        query = query.filter(search_filter)
+        # Check if it's comma-separated (multi-select) or single search term
+        if ',' in q:
+            # Multi-select: exact match on full_name or display_name
+            dataset_names = [name.strip() for name in q.split(",")]
+            query = query.filter(
+                or_(
+                    Dataset.full_name.in_(dataset_names),
+                    Dataset.display_name.in_(dataset_names),
+                )
+            )
+        else:
+            # Single search term: partial match (LIKE)
+            search_filter = or_(
+                Dataset.full_name.ilike(f"%{q}%"),
+                Dataset.display_name.ilike(f"%{q}%"),
+            )
+            query = query.filter(search_filter)
 
     # Get total count before pagination
     total = query.count()
@@ -203,122 +143,7 @@ def get_dataset(dataset_id: UUID, db: Session = Depends(get_db)):
     - Recommended actions
     - Score history
     """
-    # Get dataset
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-
-    # Get dimension scores
-    dimension_scores = (
-        db.query(DatasetDimensionScore)
-        .filter(DatasetDimensionScore.dataset_id == dataset_id)
-        .order_by(DatasetDimensionScore.dimension_key)
-        .all()
-    )
-
-    # Get dimension scores to check measured status
-    dimension_scores_dict = {
-        ds.dimension_key.lower(): bool(ds.measured) if hasattr(ds, "measured") else True
-        for ds in dimension_scores
-    }
-
-    # Get reasons - filter out reasons for unmeasured dimensions
-    all_reasons = (
-        db.query(DatasetReason)
-        .filter(DatasetReason.dataset_id == dataset_id)
-        .order_by(DatasetReason.dimension_key, DatasetReason.points_lost.desc())
-        .all()
-    )
-    # Only include reasons for measured dimensions
-    reasons = [
-        r for r in all_reasons
-        if dimension_scores_dict.get(r.dimension_key.lower(), True)
-    ]
-
-    # Helper to map action_key to dimension_key
-    def get_dimension_key_from_action_key(action_key: str) -> Optional[str]:
-        """Map action_key constant to dimension_key."""
-        from app.scoring.constants import ActionKey
-        
-        mapping = {
-            # Ownership
-            ActionKey.ASSIGN_OWNER: "ownership",
-            ActionKey.ADD_OWNER_CONTACT: "ownership",
-            # Documentation
-            ActionKey.ADD_DESCRIPTION: "documentation",
-            ActionKey.DOCUMENT_COLUMNS: "documentation",
-            # Schema hygiene
-            ActionKey.FIX_NAMING: "schema_hygiene",
-            ActionKey.REDUCE_NULLABLE_COLUMNS: "schema_hygiene",
-            ActionKey.REMOVE_LEGACY_COLUMNS: "schema_hygiene",
-            # Data quality
-            ActionKey.ADD_QUALITY_CHECKS: "data_quality",
-            ActionKey.DEFINE_SLA: "data_quality",
-            ActionKey.RESOLVE_FAILURES: "data_quality",
-            # Stability
-            ActionKey.PREVENT_BREAKING_CHANGES: "stability",
-            ActionKey.ADD_CHANGELOG: "stability",
-            ActionKey.MAINTAIN_COMPATIBILITY: "stability",
-            # Operational
-            ActionKey.DEFINE_INTENDED_USE: "operational",
-            ActionKey.DOCUMENT_LIMITATIONS: "operational",
-        }
-        return mapping.get(action_key)
-
-    # Get actions - filter out actions for unmeasured dimensions
-    all_actions = (
-        db.query(DatasetAction)
-        .filter(DatasetAction.dataset_id == dataset_id)
-        .order_by(DatasetAction.points_gain.desc())
-        .all()
-    )
-    # Only include actions for measured dimensions
-    actions = [
-        a for a in all_actions
-        if dimension_scores_dict.get(
-            get_dimension_key_from_action_key(a.action_key) or "", True
-        )
-    ]
-
-    # Get columns (schema)
-    columns = (
-        db.query(DatasetColumn)
-        .filter(DatasetColumn.dataset_id == dataset_id)
-        .order_by(DatasetColumn.name)
-        .all()
-    )
-
-    # Get score history (most recent first)
-    score_history = (
-        db.query(DatasetScoreHistory)
-        .filter(DatasetScoreHistory.dataset_id == dataset_id)
-        .order_by(DatasetScoreHistory.recorded_at.desc())
-        .limit(30)  # Limit to last 30 entries
-        .all()
-    )
-
-    # Build response
-    return DatasetDetailResponse(
-        id=dataset.id,
-        full_name=dataset.full_name,
-        display_name=dataset.display_name,
-        description=dataset.description if hasattr(dataset, "description") else None,
-        owner_name=dataset.owner_name,
-        owner_contact=dataset.owner_contact,
-        intended_use=dataset.intended_use,
-        limitations=dataset.limitations,
-        location_type=dataset.location_type if hasattr(dataset, "location_type") else None,
-        location_data=dataset.location_data if hasattr(dataset, "location_data") else None,
-        last_seen_at=dataset.last_seen_at,
-        last_scored_at=dataset.last_scored_at,
-        readiness_score=dataset.readiness_score,
-        readiness_status=dataset.readiness_status.value if isinstance(dataset.readiness_status, ReadinessStatusEnum) else str(dataset.readiness_status),
-        dimension_scores=[_dimension_score_to_response(ds) for ds in dimension_scores],
-        reasons=[_reason_to_response(r) for r in reasons],
-        actions=[_action_to_response(a) for a in actions],
-        columns=[_column_to_response(c) for c in columns],
-        score_history=[_score_history_to_response(h) for h in score_history],
-    )
+    return build_dataset_detail_response(db, dataset_id)
 
 
 @router.post("/{dataset_id}/owner", response_model=DatasetDetailResponse)
@@ -333,8 +158,10 @@ def update_owner(
     """
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
+        logger.warning("Dataset not found for owner update: %s", dataset_id)
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+    logger.info("Updating owner for dataset %s", dataset_id)
     # Update owner fields
     if request.owner_name is not None:
         dataset.owner_name = request.owner_name
@@ -342,8 +169,6 @@ def update_owner(
         dataset.owner_contact = request.owner_contact
 
     # Build metadata for scoring (using existing columns if available)
-    # Note: In a real system, we'd fetch column metadata from a separate table
-    # For MVP, we'll use empty columns list
     metadata = build_metadata_from_dataset(dataset, columns=[])
 
     # Re-score the dataset (this saves history and updates actions)
@@ -352,8 +177,7 @@ def update_owner(
     db.commit()
     db.refresh(dataset)
 
-    # Return updated dataset detail
-    return get_dataset(dataset_id, db)
+    return build_dataset_detail_response(db, dataset_id)
 
 
 @router.post("/{dataset_id}/metadata", response_model=DatasetDetailResponse)
@@ -368,8 +192,10 @@ def update_metadata(
     """
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
+        logger.warning("Dataset not found for metadata update: %s", dataset_id)
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+    logger.info("Updating metadata for dataset %s", dataset_id)
     # Update metadata fields
     if request.display_name is not None:
         dataset.display_name = request.display_name
@@ -379,8 +205,6 @@ def update_metadata(
         dataset.limitations = request.limitations
 
     # Build metadata for scoring (using existing columns if available)
-    # Note: In a real system, we'd fetch column metadata from a separate table
-    # For MVP, we'll use empty columns list
     metadata = build_metadata_from_dataset(dataset, columns=[])
 
     # Re-score the dataset (this saves history and updates actions)
@@ -389,9 +213,7 @@ def update_metadata(
     db.commit()
     db.refresh(dataset)
 
-    # Return updated dataset detail
-    return get_dataset(dataset_id, db)
-
+    return build_dataset_detail_response(db, dataset_id)
 
 
 @router.get("/{dataset_id}/schema/protobuf")
@@ -417,7 +239,7 @@ def get_protobuf_schema(dataset_id: UUID, db: Session = Depends(get_db)):
         )
 
     # Convert columns to response format
-    column_responses = [_column_to_response(c) for c in columns]
+    column_responses = [column_to_response(c) for c in columns]
 
     # Generate namespace from dataset name
     namespace = ".".join(dataset.full_name.split(".")[:-1]) if "." in dataset.full_name else "com.example"
@@ -447,8 +269,6 @@ def get_protobuf_schema(dataset_id: UUID, db: Session = Depends(get_db)):
 def get_scala_schema(dataset_id: UUID, db: Session = Depends(get_db)):
     """
     Generate Java classes for a dataset (Scala-compatible).
-    Note: Avrotize doesn't have direct Scala support, so Java classes are generated
-    which Scala can use directly.
     """
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
@@ -468,7 +288,7 @@ def get_scala_schema(dataset_id: UUID, db: Session = Depends(get_db)):
         )
 
     # Convert columns to response format
-    column_responses = [_column_to_response(c) for c in columns]
+    column_responses = [column_to_response(c) for c in columns]
 
     # Generate namespace from dataset name
     namespace = ".".join(dataset.full_name.split(".")[:-1]) if "." in dataset.full_name else "com.example"
@@ -517,7 +337,7 @@ def get_python_schema(dataset_id: UUID, db: Session = Depends(get_db)):
         )
 
     # Convert columns to response format
-    column_responses = [_column_to_response(c) for c in columns]
+    column_responses = [column_to_response(c) for c in columns]
 
     # Generate namespace from dataset name
     namespace = ".".join(dataset.full_name.split(".")[:-1]) if "." in dataset.full_name else "com.example"
@@ -552,42 +372,44 @@ def get_dataset_lineage(dataset_id: UUID, db: Session = Depends(get_db)):
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Get upstream lineage (datasets this dataset depends on)
+    # Get upstream lineage with joined datasets (fixes N+1)
     upstream_lineage = (
         db.query(DatasetLineage)
+        .options(joinedload(DatasetLineage.upstream_dataset))
         .filter(DatasetLineage.downstream_dataset_id == dataset_id)
         .all()
     )
-    
+
     upstream_items = []
     for lineage in upstream_lineage:
-        upstream_dataset = db.query(Dataset).filter(Dataset.id == lineage.upstream_dataset_id).first()
-        if upstream_dataset:
+        upstream_ds = lineage.upstream_dataset
+        if upstream_ds:
             upstream_items.append(
                 DatasetLineageItem(
-                    id=upstream_dataset.id,
-                    full_name=upstream_dataset.full_name,
-                    display_name=upstream_dataset.display_name or upstream_dataset.full_name,
+                    id=upstream_ds.id,
+                    full_name=upstream_ds.full_name,
+                    display_name=upstream_ds.display_name or upstream_ds.full_name,
                     transformation_type=lineage.transformation_type,
                 )
             )
 
-    # Get downstream lineage (datasets that depend on this dataset)
+    # Get downstream lineage with joined datasets (fixes N+1)
     downstream_lineage = (
         db.query(DatasetLineage)
+        .options(joinedload(DatasetLineage.downstream_dataset))
         .filter(DatasetLineage.upstream_dataset_id == dataset_id)
         .all()
     )
-    
+
     downstream_items = []
     for lineage in downstream_lineage:
-        downstream_dataset = db.query(Dataset).filter(Dataset.id == lineage.downstream_dataset_id).first()
-        if downstream_dataset:
+        downstream_ds = lineage.downstream_dataset
+        if downstream_ds:
             downstream_items.append(
                 DatasetLineageItem(
-                    id=downstream_dataset.id,
-                    full_name=downstream_dataset.full_name,
-                    display_name=downstream_dataset.display_name or downstream_dataset.full_name,
+                    id=downstream_ds.id,
+                    full_name=downstream_ds.full_name,
+                    display_name=downstream_ds.display_name or downstream_ds.full_name,
                     transformation_type=lineage.transformation_type,
                 )
             )
@@ -611,62 +433,60 @@ def get_column_lineage(dataset_id: UUID, column_id: UUID, db: Session = Depends(
     if not column:
         raise HTTPException(status_code=404, detail="Column not found")
 
-    # Get upstream lineage (columns this column depends on)
+    # Get upstream lineage with joined columns and datasets (fixes N+1)
     upstream_lineage = (
         db.query(ColumnLineage)
+        .options(joinedload(ColumnLineage.upstream_column).joinedload(DatasetColumn.dataset))
         .filter(ColumnLineage.downstream_column_id == column_id)
         .all()
     )
-    
+
     upstream_items = []
     for lineage in upstream_lineage:
-        upstream_column = db.query(DatasetColumn).filter(DatasetColumn.id == lineage.upstream_column_id).first()
-        if upstream_column:
-            upstream_dataset = db.query(Dataset).filter(Dataset.id == upstream_column.dataset_id).first()
-            if upstream_dataset:
-                upstream_items.append(
-                    ColumnLineageItem(
-                        id=lineage.id,
-                        upstream_column_id=lineage.upstream_column_id,
-                        downstream_column_id=lineage.downstream_column_id,
-                        upstream_column_name=upstream_column.name,
-                        upstream_dataset_id=upstream_dataset.id,
-                        upstream_dataset_name=upstream_dataset.display_name or upstream_dataset.full_name,
-                        downstream_column_name=column.name,
-                        downstream_dataset_id=dataset.id,
-                        downstream_dataset_name=dataset.display_name or dataset.full_name,
-                        transformation_expression=lineage.transformation_expression,
-                        created_at=lineage.created_at,
-                    )
+        upstream_col = lineage.upstream_column
+        if upstream_col and upstream_col.dataset:
+            upstream_items.append(
+                ColumnLineageItem(
+                    id=lineage.id,
+                    upstream_column_id=lineage.upstream_column_id,
+                    downstream_column_id=lineage.downstream_column_id,
+                    upstream_column_name=upstream_col.name,
+                    upstream_dataset_id=upstream_col.dataset.id,
+                    upstream_dataset_name=upstream_col.dataset.display_name or upstream_col.dataset.full_name,
+                    downstream_column_name=column.name,
+                    downstream_dataset_id=dataset.id,
+                    downstream_dataset_name=dataset.display_name or dataset.full_name,
+                    transformation_expression=lineage.transformation_expression,
+                    created_at=lineage.created_at,
                 )
+            )
 
-    # Get downstream lineage (columns that depend on this column)
+    # Get downstream lineage with joined columns and datasets (fixes N+1)
     downstream_lineage = (
         db.query(ColumnLineage)
+        .options(joinedload(ColumnLineage.downstream_column).joinedload(DatasetColumn.dataset))
         .filter(ColumnLineage.upstream_column_id == column_id)
         .all()
     )
-    
+
     downstream_items = []
     for lineage in downstream_lineage:
-        downstream_column = db.query(DatasetColumn).filter(DatasetColumn.id == lineage.downstream_column_id).first()
-        if downstream_column:
-            downstream_dataset = db.query(Dataset).filter(Dataset.id == downstream_column.dataset_id).first()
-            if downstream_dataset:
-                downstream_items.append(
-                    ColumnLineageItem(
-                        id=lineage.id,
-                        upstream_column_id=lineage.upstream_column_id,
-                        downstream_column_id=lineage.downstream_column_id,
-                        upstream_column_name=column.name,
-                        upstream_dataset_id=dataset.id,
-                        upstream_dataset_name=dataset.display_name or dataset.full_name,
-                        downstream_column_name=downstream_column.name,
-                        downstream_dataset_id=downstream_dataset.id,
-                        downstream_dataset_name=downstream_dataset.display_name or downstream_dataset.full_name,
-                        transformation_expression=lineage.transformation_expression,
-                        created_at=lineage.created_at,
-                    )
+        downstream_col = lineage.downstream_column
+        if downstream_col and downstream_col.dataset:
+            downstream_items.append(
+                ColumnLineageItem(
+                    id=lineage.id,
+                    upstream_column_id=lineage.upstream_column_id,
+                    downstream_column_id=lineage.downstream_column_id,
+                    upstream_column_name=column.name,
+                    upstream_dataset_id=dataset.id,
+                    upstream_dataset_name=dataset.display_name or dataset.full_name,
+                    downstream_column_name=downstream_col.name,
+                    downstream_dataset_id=downstream_col.dataset.id,
+                    downstream_dataset_name=downstream_col.dataset.display_name or downstream_col.dataset.full_name,
+                    transformation_expression=lineage.transformation_expression,
+                    created_at=lineage.created_at,
                 )
+            )
 
     return ColumnLineageResponse(upstream=upstream_items, downstream=downstream_items)

@@ -2,11 +2,13 @@
 Ingestion endpoints for datasets.
 """
 
-import json
+import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+logger = logging.getLogger(__name__)
+
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -251,6 +253,7 @@ def ingest_mock_data(db: Session = Depends(get_db)):
     # Get mock dataset configurations
     datasets_config = _create_mock_datasets()
 
+    logger.info("Starting mock data ingestion (%d datasets)", len(datasets_config))
     created_datasets = []
     errors = []
 
@@ -320,6 +323,7 @@ def ingest_mock_data(db: Session = Depends(get_db)):
             )
 
         except Exception as e:
+            logger.error("Failed to ingest dataset %s: %s", config.get("full_name", "unknown"), e)
             errors.append(
                 {
                     "full_name": config.get("full_name", "unknown"),
@@ -328,6 +332,7 @@ def ingest_mock_data(db: Session = Depends(get_db)):
             )
             db.rollback()
 
+    logger.info("Mock ingestion complete: %d ingested, %d errors", len(created_datasets), len(errors))
     return {
         "ingested": len(created_datasets),
         "errors": len(errors),

@@ -1,83 +1,96 @@
-.PHONY: build start full stop clean restart logs seed help
+.PHONY: up down restart build dev logs status seed clean help \
+       logs-backend logs-frontend logs-db \
+       seed-force shell-backend shell-db test migrate
 
 # Detect container runtime: use podman if available, otherwise docker
 CONTAINER_RUNTIME := $(shell command -v podman >/dev/null 2>&1 && echo podman || echo docker)
-# Podman uses 'podman compose' (space), Docker uses 'docker-compose' (hyphen)
 COMPOSE_CMD := $(if $(findstring podman,$(CONTAINER_RUNTIME)),podman compose,docker-compose)
 
-help: ## Show this help message
-	@echo 'Usage: make [target]'
-	@echo 'Container runtime: $(CONTAINER_RUNTIME)'
+help: ## Show available commands
 	@echo ''
-	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo '  Ondo — Dataset Readiness Platform'
+	@echo '  Container runtime: $(CONTAINER_RUNTIME)'
+	@echo ''
+	@echo '  Quick start:  make up'
+	@echo '  Stop:         make down'
+	@echo ''
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ''
 
-build: ## Build all container images
-	$(COMPOSE_CMD) build
+# ── Lifecycle ──────────────────────────────────────────────────
 
-start: ## Start containers using latest images
-	$(COMPOSE_CMD) up -d
-	@echo "Services starting... Wait ~30 seconds for startup"
-	@echo "Demo data will be seeded automatically if database is empty"
-	@echo "Using container runtime: $(CONTAINER_RUNTIME)"
-
-full: ## Build images and start containers
+up: ## Start the app (build images if needed)
 	$(COMPOSE_CMD) up -d --build
-	@echo "Services starting... Wait ~30 seconds for startup"
-	@echo "Demo data will be seeded automatically if database is empty"
-	@echo "Using container runtime: $(CONTAINER_RUNTIME)"
+	@echo ''
+	@echo '  Starting Ondo...'
+	@echo '  Frontend:  http://localhost:3000'
+	@echo '  Backend:   http://localhost:8000'
+	@echo '  API docs:  http://localhost:8000/docs'
+	@echo ''
+	@echo '  Run "make logs" to follow startup progress'
+	@echo '  Run "make seed" to load demo data'
 
-stop: ## Stop containers
+down: ## Stop the app
 	$(COMPOSE_CMD) down
 
-clean: ## Clean containers and images
-	$(COMPOSE_CMD) down -v
-	$(COMPOSE_CMD) rm -f
-
-restart: ## Stop containers, build images, and start with new images
+restart: ## Restart the app (rebuild images)
 	$(COMPOSE_CMD) down
+	$(COMPOSE_CMD) up -d --build
+	@echo ''
+	@echo '  Restarting Ondo...'
+	@echo '  Run "make logs" to follow startup progress'
+
+dev: ## Start in development mode (hot-reload, mounted volumes)
+	$(COMPOSE_CMD) -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+build: ## Build all container images without starting
 	$(COMPOSE_CMD) build
-	$(COMPOSE_CMD) up -d
-	@echo "Services restarted with new images... Wait ~30 seconds for startup"
-	@echo "Using container runtime: $(CONTAINER_RUNTIME)"
 
-logs: ## View logs from all services
-	$(COMPOSE_CMD) logs -f
+# ── Observe ────────────────────────────────────────────────────
 
-logs-backend: ## View backend logs
-	$(COMPOSE_CMD) logs -f backend
-
-logs-frontend: ## View frontend logs
-	$(COMPOSE_CMD) logs -f frontend
-
-logs-db: ## View database logs
-	$(COMPOSE_CMD) logs -f db
-
-seed: ## Seed demo data (run after 'make start', or use 'make seed-force' to re-seed)
-	@echo "Seeding demo data..."
-	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py
-	@echo "Demo data seeded! Visit http://localhost:3000/datasets"
-
-seed-force: ## Force re-seed demo data (clears existing data)
-	@echo "Force seeding demo data (clearing existing data)..."
-	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py --force
-	@echo "Demo data re-seeded! Visit http://localhost:3000/datasets"
-
-dev: ## Start in development mode with hot-reload
-	$(COMPOSE_CMD) -f docker-compose.yml -f docker-compose.dev.yml up
-
-ps: ## Show running containers
+status: ## Show running containers and health
 	$(COMPOSE_CMD) ps
 
-shell-backend: ## Open shell in backend container
+logs: ## Follow logs from all services
+	$(COMPOSE_CMD) logs -f
+
+logs-backend: ## Follow backend logs
+	$(COMPOSE_CMD) logs -f backend
+
+logs-frontend: ## Follow frontend logs
+	$(COMPOSE_CMD) logs -f frontend
+
+logs-db: ## Follow database logs
+	$(COMPOSE_CMD) logs -f db
+
+# ── Data ───────────────────────────────────────────────────────
+
+seed: ## Load demo data (safe — skips if data exists)
+	@echo 'Seeding demo data...'
+	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py
+	@echo 'Done! Visit http://localhost:3000'
+
+seed-force: ## Reload demo data (clears and re-seeds)
+	@echo 'Force re-seeding demo data...'
+	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py --force
+	@echo 'Done! Visit http://localhost:3000'
+
+migrate: ## Run database migrations
+	$(COMPOSE_CMD) exec backend alembic upgrade head
+
+# ── Debug ──────────────────────────────────────────────────────
+
+shell-backend: ## Open a shell in the backend container
 	$(COMPOSE_CMD) exec backend /bin/bash
 
-shell-db: ## Open PostgreSQL shell
+shell-db: ## Open a PostgreSQL shell
 	$(COMPOSE_CMD) exec db psql -U postgres -d ondo
 
 test: ## Run backend tests
 	$(COMPOSE_CMD) exec backend pytest tests/ -v
 
-migrate: ## Run database migrations
-	$(COMPOSE_CMD) exec backend alembic upgrade head
+# ── Cleanup ────────────────────────────────────────────────────
 
+clean: ## Stop the app and delete all data (volumes)
+	$(COMPOSE_CMD) down -v
+	@echo 'Containers stopped and volumes removed'

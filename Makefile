@@ -27,8 +27,8 @@ up: ## Start the app (build images if needed)
 	@echo '  Backend:   http://localhost:8000'
 	@echo '  API docs:  http://localhost:8000/docs'
 	@echo ''
+	@echo '  Migrations and demo data seed run automatically on startup.'
 	@echo '  Run "make logs" to follow startup progress'
-	@echo '  Run "make seed" to load demo data'
 
 down: ## Stop the app
 	$(COMPOSE_CMD) down
@@ -65,12 +65,12 @@ logs-db: ## Follow database logs
 
 # ── Data ───────────────────────────────────────────────────────
 
-seed: ## Load demo data (safe — skips if data exists)
+seed: ## Re-run demo data seed manually (runs automatically on startup)
 	@echo 'Seeding demo data...'
 	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py
 	@echo 'Done! Visit http://localhost:3000'
 
-seed-force: ## Reload demo data (clears and re-seeds)
+seed-force: ## Clear all data and re-seed from scratch
 	@echo 'Force re-seeding demo data...'
 	$(COMPOSE_CMD) exec backend python scripts/seed_demo_data.py --force
 	@echo 'Done! Visit http://localhost:3000'

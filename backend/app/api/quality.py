@@ -20,7 +20,7 @@ from app.api.schemas import (
     QualityRuleUpdate,
 )
 from app.db import get_db
-from app.models import Dataset, QualityRule, QualityRuleExecution
+from app.models import Dataset, DatasetWatch, Notification, QualityRule, QualityRuleExecution
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,42 @@ def _get_rule_or_404(
     if not rule:
         raise HTTPException(status_code=404, detail="Quality rule not found")
     return rule
+
+
+def _notify_quality_failure(
+    db: Session, dataset_id: UUID, rule_id: UUID, execution: QualityRuleExecution
+) -> None:
+    """Create notifications for watchers when a quality rule fails."""
+    rule = db.query(QualityRule).filter(QualityRule.id == rule_id).first()
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not rule or not dataset:
+        return
+
+    watchers = db.query(DatasetWatch).filter(DatasetWatch.dataset_id == dataset_id).all()
+    if not watchers:
+        return
+
+    title = f"Quality failure: {rule.name}"
+    message = (
+        f"Quality rule '{rule.name}' ({rule.rule_type}) failed on {dataset.display_name}."
+    )
+    if execution.records_failed is not None:
+        message += f" {execution.records_failed} records failed."
+    if execution.error_message:
+        message += f" Error: {execution.error_message}"
+
+    for watcher in watchers:
+        notification = Notification(
+            dataset_id=dataset_id,
+            user_id=watcher.user_id,
+            notification_type="quality_failure",
+            title=title,
+            message=message,
+        )
+        db.add(notification)
+
+    db.commit()
+    logger.info("Created %d quality_failure notifications for dataset %s", len(watchers), dataset_id)
 
 
 @router.get(
@@ -288,6 +324,10 @@ def record_execution(
     db.refresh(execution)
     logger.info("Recorded execution for rule %s: passed=%s", rule_id, body.passed)
 
+    # Create notification if rule failed
+    if not body.passed:
+        _notify_quality_failure(db, dataset_id, rule_id, execution)
+
     return QualityRuleExecutionResponse(
         id=execution.id,
         rule_id=execution.rule_id,
@@ -363,6 +403,22 @@ def record_batch_execution(
         len(results),
         dataset_id,
     )
+
+    # Create notifications for any failed rules
+    for item in body.executions:
+        if not item.passed:
+            execution_obj = next(
+                (r for r in results if str(r.rule_id) == str(item.rule_id)),
+                None,
+            )
+            if execution_obj:
+                # Build a minimal execution-like object for notification
+                exec_for_notify = type('Exec', (), {
+                    'records_failed': item.records_failed,
+                    'error_message': item.error_message,
+                })()
+                _notify_quality_failure(db, dataset_id, item.rule_id, exec_for_notify)
+
     return results
 
 

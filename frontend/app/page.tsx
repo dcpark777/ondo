@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getDashboardSummary, getDashboardTrends, DashboardSummary, DashboardTrends } from './api/client'
+import { getDashboardSummary, getDashboardTrends, getPopularDatasets, DashboardSummary, DashboardTrends, PopularDataset } from './api/client'
 import { getStatusBadgeClass, getStatusLabel, getDimensionLabel } from './lib/dataset-utils'
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [trends, setTrends] = useState<DashboardTrends | null>(null)
+  const [popular, setPopular] = useState<PopularDataset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,6 +28,7 @@ export default function DashboardPage() {
       }
     }
     fetchData()
+    getPopularDatasets(30, 5).then(res => setPopular(res.datasets)).catch(() => {})
   }, [])
 
   if (loading) {
@@ -305,6 +307,27 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-400 italic">No datasets scored yet</p>
         )}
       </div>
+
+      {/* Most Popular */}
+      {popular.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Viewed</h2>
+          <div className="space-y-3">
+            {popular.map((ds, i) => (
+              <Link key={ds.id} href={`/datasets/${ds.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{ds.display_name}</div>
+                    <div className="text-xs text-gray-500">{ds.view_count} views · {ds.unique_viewers} viewers</div>
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-gray-700">{ds.readiness_score}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

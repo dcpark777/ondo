@@ -543,6 +543,31 @@ class Notification(Base):
     dataset = relationship("Dataset")
 
 
+class DatasetView(Base):
+    """Dataset view tracking for usage metrics."""
+
+    __tablename__ = "dataset_views"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(String(255), nullable=False, index=True)
+    viewed_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True
+    )
+
+    # Relationships
+    dataset = relationship("Dataset")
+
+    __table_args__ = (
+        Index("idx_dataset_views_dataset_viewed", "dataset_id", "viewed_at"),
+    )
+
+
 class ColumnProfile(Base):
     """Profiling statistics for a dataset column."""
 

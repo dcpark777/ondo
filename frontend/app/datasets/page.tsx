@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { listDatasets, DatasetListItem, ListDatasetsParams, getDatasetFacets, DatasetFacets } from '../api/client'
+import { listDatasets, DatasetListItem, ListDatasetsParams, getDatasetFacets, DatasetFacets, bulkUpdateTags, bulkUpdateClassification } from '../api/client'
 import {
   getStatusBadgeClass,
   getStatusLabel,
@@ -21,6 +21,14 @@ export default function DatasetsPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkTagInput, setBulkTagInput] = useState('')
+  const [bulkTagMode, setBulkTagMode] = useState<'add' | 'remove' | 'replace'>('add')
+  const [bulkClassification, setBulkClassification] = useState('')
+  const [bulkDomain, setBulkDomain] = useState('')
+  const [bulkActionType, setBulkActionType] = useState<'tags' | 'classification' | null>(null)
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string[]>([])
@@ -265,6 +273,59 @@ export default function DatasetsPage() {
     })
   }
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sortedDatasets.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(sortedDatasets.map(d => d.id)))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkTags = async () => {
+    const tags = bulkTagInput.split(',').map(t => t.trim()).filter(Boolean)
+    if (tags.length === 0 || selectedIds.size === 0) return
+    try {
+      await bulkUpdateTags({
+        dataset_ids: Array.from(selectedIds),
+        tags,
+        mode: bulkTagMode,
+      })
+      setBulkTagInput('')
+      setBulkActionType(null)
+      setSelectedIds(new Set())
+      fetchDatasets()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Bulk tag update failed')
+    }
+  }
+
+  const handleBulkClassification = async () => {
+    if (selectedIds.size === 0) return
+    try {
+      await bulkUpdateClassification({
+        dataset_ids: Array.from(selectedIds),
+        classification: bulkClassification || null,
+        domain: bulkDomain || null,
+      })
+      setBulkClassification('')
+      setBulkDomain('')
+      setBulkActionType(null)
+      setSelectedIds(new Set())
+      fetchDatasets()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Bulk classification update failed')
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
@@ -478,7 +539,7 @@ export default function DatasetsPage() {
                         }}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">{getLocationLabel(locationType)}</span>
+                      <span className="ml-2 text-sm text-gray-700">{getLocationLabel(locationType)}{facets?.location_type[locationType] != null && <span className="text-gray-400 ml-1">({facets.location_type[locationType]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -566,7 +627,7 @@ export default function DatasetsPage() {
                   {uniqueDomains.map((d) => (
                     <label key={d} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
                       <input type="checkbox" checked={domainFilter.includes(d)} onChange={(e) => { if (e.target.checked) setDomainFilter([...domainFilter, d]); else setDomainFilter(domainFilter.filter(x => x !== d)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                      <span className="ml-2 text-sm text-gray-700">{d}</span>
+                      <span className="ml-2 text-sm text-gray-700">{d}{facets?.domain[d] != null && <span className="text-gray-400 ml-1">({facets.domain[d]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -610,7 +671,7 @@ export default function DatasetsPage() {
                   {uniqueTags.map((t) => (
                     <label key={t} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
                       <input type="checkbox" checked={tagFilter.includes(t)} onChange={(e) => { if (e.target.checked) setTagFilter([...tagFilter, t]); else setTagFilter(tagFilter.filter(x => x !== t)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                      <span className="ml-2 text-sm text-gray-700">{t}</span>
+                      <span className="ml-2 text-sm text-gray-700">{t}{facets?.tags[t] != null && <span className="text-gray-400 ml-1">({facets.tags[t]})</span>}</span>
                     </label>
                   ))}
                 </div>
@@ -698,6 +759,97 @@ export default function DatasetsPage() {
         </div>
       </div>
 
+      {/* Bulk Action Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-blue-800">
+              {selectedIds.size} dataset{selectedIds.size !== 1 ? 's' : ''} selected
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setBulkActionType('tags')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  bulkActionType === 'tags' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-50'
+                }`}
+              >
+                Bulk Tags
+              </button>
+              <button
+                onClick={() => setBulkActionType('classification')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  bulkActionType === 'classification' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-50'
+                }`}
+              >
+                Bulk Classify
+              </button>
+              <button
+                onClick={() => { setSelectedIds(new Set()); setBulkActionType(null) }}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {bulkActionType === 'tags' && (
+            <div className="flex items-center gap-3 mt-2">
+              <select
+                value={bulkTagMode}
+                onChange={e => setBulkTagMode(e.target.value as 'add' | 'remove' | 'replace')}
+                className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="add">Add tags</option>
+                <option value="remove">Remove tags</option>
+                <option value="replace">Replace all tags</option>
+              </select>
+              <input
+                type="text"
+                value={bulkTagInput}
+                onChange={e => setBulkTagInput(e.target.value)}
+                placeholder="tag1, tag2, tag3"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+              />
+              <button
+                onClick={handleBulkTags}
+                className="px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+
+          {bulkActionType === 'classification' && (
+            <div className="flex items-center gap-3 mt-2">
+              <select
+                value={bulkClassification}
+                onChange={e => setBulkClassification(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">No classification</option>
+                <option value="public">Public</option>
+                <option value="internal">Internal</option>
+                <option value="confidential">Confidential</option>
+                <option value="restricted">Restricted</option>
+              </select>
+              <input
+                type="text"
+                value={bulkDomain}
+                onChange={e => setBulkDomain(e.target.value)}
+                placeholder="Domain (optional)"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+              />
+              <button
+                onClick={handleBulkClassification}
+                className="px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Error State */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md mb-6">
@@ -720,7 +872,15 @@ export default function DatasetsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th 
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === sortedDatasets.length && sortedDatasets.length > 0}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </th>
+                  <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('dataset')}
                   >
@@ -773,7 +933,7 @@ export default function DatasetsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedDatasets.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       No datasets found
                     </td>
                   </tr>
@@ -783,6 +943,14 @@ export default function DatasetsPage() {
                       key={dataset.id}
                       className="hover:bg-gray-50"
                     >
+                      <td className="px-3 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(dataset.id)}
+                          onChange={() => toggleSelect(dataset.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link
                           href={`/datasets/${dataset.id}`}

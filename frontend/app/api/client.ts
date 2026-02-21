@@ -505,6 +505,61 @@ export async function getColumnLineage(datasetId: string, columnId: string): Pro
   return response.json()
 }
 
+// Lineage Graph
+export interface LineageGraphNode {
+  id: string
+  full_name: string
+  display_name: string
+  readiness_score: number
+  readiness_status: string
+  is_current: boolean
+}
+
+export interface LineageGraphEdge {
+  source: string
+  target: string
+  transformation_type: string | null
+}
+
+export interface LineageGraph {
+  nodes: LineageGraphNode[]
+  edges: LineageGraphEdge[]
+  root_id: string
+}
+
+export async function getLineageGraph(datasetId: string, depth: number = 2): Promise<LineageGraph> {
+  const url = `${API_URL}/api/datasets/${datasetId}/lineage/graph?depth=${depth}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch lineage graph: ${response.statusText}`)
+  return response.json()
+}
+
+// Impact Analysis
+export interface ImpactedDataset {
+  id: string
+  full_name: string
+  display_name: string
+  readiness_score: number
+  readiness_status: string
+  depth: number
+  path: string[]
+}
+
+export interface ImpactAnalysis {
+  dataset_id: string
+  dataset_name: string
+  depth: number
+  total_impacted: number
+  impacted: ImpactedDataset[]
+}
+
+export async function getImpactAnalysis(datasetId: string, depth: number = 3): Promise<ImpactAnalysis> {
+  const url = `${API_URL}/api/datasets/${datasetId}/impact?depth=${depth}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch impact analysis: ${response.statusText}`)
+  return response.json()
+}
+
 /**
  * Tags & Classification
  */
@@ -1033,4 +1088,85 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   const url = `${API_URL}/api/notifications/read-all?user_id=${encodeURIComponent(userId)}`
   const response = await fetch(url, { method: 'POST' })
   if (!response.ok) throw new Error(`Failed to mark all as read: ${response.statusText}`)
+}
+
+// Usage Metrics
+
+export interface ViewStats {
+  dataset_id: string
+  days: number
+  total_views: number
+  unique_viewers: number
+  daily_views: { date: string; count: number }[]
+  recent_viewers: { user_id: string; last_viewed: string }[]
+}
+
+export interface PopularDataset {
+  id: string
+  full_name: string
+  display_name: string
+  readiness_score: number
+  readiness_status: string
+  view_count: number
+  unique_viewers: number
+}
+
+export async function recordDatasetView(datasetId: string, userId: string): Promise<void> {
+  const url = `${API_URL}/api/datasets/${datasetId}/views?user_id=${encodeURIComponent(userId)}`
+  await fetch(url, { method: 'POST' })
+}
+
+export async function getViewStats(datasetId: string, days: number = 30): Promise<ViewStats> {
+  const url = `${API_URL}/api/datasets/${datasetId}/views/stats?days=${days}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch view stats: ${response.statusText}`)
+  return response.json()
+}
+
+export async function getPopularDatasets(days: number = 30, limit: number = 10): Promise<{ days: number; datasets: PopularDataset[] }> {
+  const url = `${API_URL}/api/datasets/popular?days=${days}&limit=${limit}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch popular datasets: ${response.statusText}`)
+  return response.json()
+}
+
+// Bulk Operations
+
+export interface BulkTagRequest {
+  dataset_ids: string[]
+  tags: string[]
+  mode: 'add' | 'remove' | 'replace'
+}
+
+export interface BulkClassificationRequest {
+  dataset_ids: string[]
+  classification?: string | null
+  domain?: string | null
+}
+
+export interface BulkOperationResult {
+  updated: number
+  dataset_ids: string[]
+}
+
+export async function bulkUpdateTags(data: BulkTagRequest): Promise<BulkOperationResult> {
+  const url = `${API_URL}/api/bulk/tags`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to bulk update tags: ${response.statusText}`)
+  return response.json()
+}
+
+export async function bulkUpdateClassification(data: BulkClassificationRequest): Promise<BulkOperationResult> {
+  const url = `${API_URL}/api/bulk/classification`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to bulk update classification: ${response.statusText}`)
+  return response.json()
 }

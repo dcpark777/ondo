@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { DatasetDetail, ScoreHistory, checkWatch, startWatching, stopWatching } from '../../../api/client'
+import { DatasetDetail, ScoreHistory, checkWatch, startWatching, stopWatching, recordDatasetView } from '../../../api/client'
 import {
   getStatusBadgeClass,
   getStatusLabel,
@@ -115,6 +115,12 @@ export default function DatasetContent(props: DatasetContentProps) {
     checkWatch(dataset.id, userId)
       .then((res) => setWatching(res.watching))
       .catch(() => {})
+  }, [dataset.id])
+
+  // Record dataset view
+  useEffect(() => {
+    const userId = getUserId()
+    recordDatasetView(dataset.id, userId).catch(() => {})
   }, [dataset.id])
 
   const toggleWatch = async () => {

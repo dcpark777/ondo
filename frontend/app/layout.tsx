@@ -39,6 +39,12 @@ export default function RootLayout({
                     Datasets
                   </a>
                   <a
+                    href="/browse"
+                    className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Browse
+                  </a>
+                  <a
                     href="/glossary"
                     className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                   >

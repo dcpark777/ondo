@@ -653,3 +653,166 @@ def get_column_lineage(dataset_id: UUID, column_id: UUID, db: Session = Depends(
             )
 
     return ColumnLineageResponse(upstream=upstream_items, downstream=downstream_items)
+
+
+@router.get("/{dataset_id}/lineage/graph")
+def get_lineage_graph(
+    dataset_id: UUID,
+    depth: int = Query(2, ge=1, le=5, description="Depth of lineage traversal"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get full lineage graph for visualization.
+    Traverses upstream and downstream to the specified depth.
+    Returns nodes and edges for graph rendering.
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    logger.info("Fetching lineage graph for dataset %s with depth %d", dataset_id, depth)
+
+    nodes = {}
+    edges = []
+
+    # BFS upstream
+    visited_up: set = set()
+    queue: list = [(dataset_id, 0)]
+    while queue:
+        current_id, current_depth = queue.pop(0)
+        if current_id in visited_up or current_depth > depth:
+            continue
+        visited_up.add(current_id)
+
+        ds = db.query(Dataset).filter(Dataset.id == current_id).first()
+        if ds:
+            nodes[str(ds.id)] = {
+                "id": str(ds.id),
+                "full_name": ds.full_name,
+                "display_name": ds.display_name,
+                "readiness_score": ds.readiness_score,
+                "readiness_status": ds.readiness_status.value if isinstance(ds.readiness_status, ReadinessStatusEnum) else str(ds.readiness_status),
+                "is_current": str(ds.id) == str(dataset_id),
+            }
+
+        if current_depth < depth:
+            upstream = (
+                db.query(DatasetLineage)
+                .filter(DatasetLineage.downstream_dataset_id == current_id)
+                .all()
+            )
+            for lin in upstream:
+                edges.append({
+                    "source": str(lin.upstream_dataset_id),
+                    "target": str(lin.downstream_dataset_id),
+                    "transformation_type": lin.transformation_type,
+                })
+                queue.append((lin.upstream_dataset_id, current_depth + 1))
+
+    # BFS downstream
+    visited_down: set = set()
+    queue = [(dataset_id, 0)]
+    while queue:
+        current_id, current_depth = queue.pop(0)
+        if current_id in visited_down or current_depth > depth:
+            continue
+        visited_down.add(current_id)
+
+        ds = db.query(Dataset).filter(Dataset.id == current_id).first()
+        if ds and str(ds.id) not in nodes:
+            nodes[str(ds.id)] = {
+                "id": str(ds.id),
+                "full_name": ds.full_name,
+                "display_name": ds.display_name,
+                "readiness_score": ds.readiness_score,
+                "readiness_status": ds.readiness_status.value if isinstance(ds.readiness_status, ReadinessStatusEnum) else str(ds.readiness_status),
+                "is_current": str(ds.id) == str(dataset_id),
+            }
+
+        if current_depth < depth:
+            downstream = (
+                db.query(DatasetLineage)
+                .filter(DatasetLineage.upstream_dataset_id == current_id)
+                .all()
+            )
+            for lin in downstream:
+                edges.append({
+                    "source": str(lin.upstream_dataset_id),
+                    "target": str(lin.downstream_dataset_id),
+                    "transformation_type": lin.transformation_type,
+                })
+                queue.append((lin.downstream_dataset_id, current_depth + 1))
+
+    # Deduplicate edges
+    seen_edges: set = set()
+    unique_edges = []
+    for edge in edges:
+        key = f"{edge['source']}->{edge['target']}"
+        if key not in seen_edges:
+            seen_edges.add(key)
+            unique_edges.append(edge)
+
+    return {
+        "nodes": list(nodes.values()),
+        "edges": unique_edges,
+        "root_id": str(dataset_id),
+    }
+
+
+@router.get("/{dataset_id}/impact")
+def get_impact_analysis(
+    dataset_id: UUID,
+    depth: int = Query(3, ge=1, le=10, description="Maximum depth to traverse downstream"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get impact analysis - all downstream datasets that would be affected by changes.
+    Returns a tree of impacted datasets with depth and path information.
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    logger.info("Running impact analysis for dataset %s with depth %d", dataset_id, depth)
+
+    impacted = []
+    visited: set = set()
+    queue: list = [(dataset_id, 0, [dataset.display_name])]
+
+    while queue:
+        current_id, current_depth, path = queue.pop(0)
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+
+        if str(current_id) != str(dataset_id):
+            ds = db.query(Dataset).filter(Dataset.id == current_id).first()
+            if ds:
+                impacted.append({
+                    "id": str(ds.id),
+                    "full_name": ds.full_name,
+                    "display_name": ds.display_name,
+                    "readiness_score": ds.readiness_score,
+                    "readiness_status": ds.readiness_status.value if isinstance(ds.readiness_status, ReadinessStatusEnum) else str(ds.readiness_status),
+                    "depth": current_depth,
+                    "path": path,
+                })
+
+        if current_depth < depth:
+            downstream = (
+                db.query(DatasetLineage)
+                .filter(DatasetLineage.upstream_dataset_id == current_id)
+                .all()
+            )
+            for lin in downstream:
+                ds = db.query(Dataset).filter(Dataset.id == lin.downstream_dataset_id).first()
+                if ds:
+                    queue.append((lin.downstream_dataset_id, current_depth + 1, path + [ds.display_name]))
+
+    return {
+        "dataset_id": str(dataset_id),
+        "dataset_name": dataset.display_name,
+        "depth": depth,
+        "total_impacted": len(impacted),
+        "impacted": impacted,
+    }

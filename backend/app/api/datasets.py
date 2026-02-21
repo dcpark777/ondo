@@ -9,7 +9,7 @@ from uuid import UUID
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.response_builder import build_dataset_detail_response, column_to_response
@@ -21,8 +21,10 @@ from app.api.schemas import (
     DatasetLineageResponse,
     DatasetListItem,
     DatasetListResponse,
+    UpdateClassificationRequest,
     UpdateMetadataRequest,
     UpdateOwnerRequest,
+    UpdateTagsRequest,
 )
 from app.db import get_db
 from app.models import (
@@ -30,6 +32,7 @@ from app.models import (
     Dataset,
     DatasetColumn,
     DatasetLineage,
+    DatasetTag,
     ReadinessStatusEnum,
 )
 from app.services.dataset_metadata import build_metadata_from_dataset
@@ -44,11 +47,77 @@ from app.services.schema_generator import (
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 
 
+@router.get("/meta/tags", response_model=List[str])
+def list_all_tags(db: Session = Depends(get_db)):
+    """List all unique tags across all datasets."""
+    tags = db.query(DatasetTag.tag).distinct().order_by(DatasetTag.tag).all()
+    return [t[0] for t in tags]
+
+
+@router.get("/meta/domains", response_model=List[str])
+def list_all_domains(db: Session = Depends(get_db)):
+    """List all unique domains across all datasets."""
+    domains = (
+        db.query(Dataset.domain)
+        .filter(Dataset.domain.isnot(None))
+        .distinct()
+        .order_by(Dataset.domain)
+        .all()
+    )
+    return [d[0] for d in domains]
+
+
+@router.get("/meta/facets")
+def get_facets(db: Session = Depends(get_db)):
+    """Return counts grouped by status, classification, domain, location_type, and top tags."""
+    status_counts = (
+        db.query(Dataset.readiness_status, func.count(Dataset.id))
+        .group_by(Dataset.readiness_status)
+        .all()
+    )
+    classification_counts = (
+        db.query(Dataset.classification, func.count(Dataset.id))
+        .filter(Dataset.classification.isnot(None))
+        .group_by(Dataset.classification)
+        .all()
+    )
+    domain_counts = (
+        db.query(Dataset.domain, func.count(Dataset.id))
+        .filter(Dataset.domain.isnot(None))
+        .group_by(Dataset.domain)
+        .all()
+    )
+    location_counts = (
+        db.query(Dataset.location_type, func.count(Dataset.id))
+        .filter(Dataset.location_type.isnot(None))
+        .group_by(Dataset.location_type)
+        .all()
+    )
+    tag_counts = (
+        db.query(DatasetTag.tag, func.count(DatasetTag.dataset_id))
+        .group_by(DatasetTag.tag)
+        .order_by(func.count(DatasetTag.dataset_id).desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "status": {row[0]: row[1] for row in status_counts},
+        "classification": {row[0]: row[1] for row in classification_counts},
+        "domain": {row[0]: row[1] for row in domain_counts},
+        "location_type": {row[0]: row[1] for row in location_counts},
+        "tags": {row[0]: row[1] for row in tag_counts},
+    }
+
+
 @router.get("", response_model=DatasetListResponse)
 def list_datasets(
     status: Optional[str] = Query(None, description="Filter by readiness status (comma-separated for multiple)"),
     owner: Optional[str] = Query(None, description="Filter by owner name (comma-separated for multiple)"),
     location_type: Optional[str] = Query(None, description="Filter by location type (comma-separated for multiple)"),
+    classification: Optional[str] = Query(None, description="Filter by classification (comma-separated)"),
+    domain: Optional[str] = Query(None, description="Filter by domain (comma-separated)"),
+    tag: Optional[str] = Query(None, description="Filter by tag (comma-separated)"),
     q: Optional[str] = Query(None, description="Search in full_name and display_name"),
     db: Session = Depends(get_db),
 ):
@@ -59,6 +128,9 @@ def list_datasets(
     - status: Filter by readiness status (comma-separated: draft, internal, production_ready, gold)
     - owner: Filter by owner name (comma-separated for multiple)
     - location_type: Filter by location type (comma-separated: s3, snowflake, databricks, bigquery, hive)
+    - classification: Filter by classification (comma-separated: public, internal, confidential, restricted)
+    - domain: Filter by domain (comma-separated)
+    - tag: Filter by tag (comma-separated)
     - q: Search query for full_name and display_name
     """
     query = db.query(Dataset)
@@ -85,6 +157,25 @@ def list_datasets(
         location_list = [l.strip().lower() for l in location_type.split(",")]
         query = query.filter(Dataset.location_type.in_(location_list))
 
+    # Filter by classification
+    if classification:
+        classification_list = [c.strip().lower() for c in classification.split(",")]
+        query = query.filter(Dataset.classification.in_(classification_list))
+
+    # Filter by domain
+    if domain:
+        domain_list = [d.strip() for d in domain.split(",")]
+        query = query.filter(Dataset.domain.in_(domain_list))
+
+    # Filter by tag
+    if tag:
+        tag_list = [t.strip() for t in tag.split(",")]
+        query = query.filter(
+            Dataset.id.in_(
+                db.query(DatasetTag.dataset_id).filter(DatasetTag.tag.in_(tag_list))
+            )
+        )
+
     # Search query (supports comma-separated dataset names for exact matching)
     if q:
         # Check if it's comma-separated (multi-select) or single search term
@@ -98,18 +189,34 @@ def list_datasets(
                 )
             )
         else:
-            # Single search term: partial match (LIKE)
-            search_filter = or_(
-                Dataset.full_name.ilike(f"%{q}%"),
-                Dataset.display_name.ilike(f"%{q}%"),
-            )
-            query = query.filter(search_filter)
+            # Use PostgreSQL full-text search if search_vector is available
+            try:
+                ts_query = func.plainto_tsquery('english', q)
+                query = query.filter(Dataset.search_vector.op('@@')(ts_query))
+            except Exception:
+                # Fallback to LIKE for compatibility
+                search_filter = or_(
+                    Dataset.full_name.ilike(f"%{q}%"),
+                    Dataset.display_name.ilike(f"%{q}%"),
+                )
+                query = query.filter(search_filter)
 
     # Get total count before pagination
     total = query.count()
 
     # Order by score descending
     datasets = query.order_by(Dataset.readiness_score.desc()).all()
+
+    # Preload tags for all datasets in a single query
+    dataset_ids = [ds.id for ds in datasets]
+    all_tags = (
+        db.query(DatasetTag.dataset_id, DatasetTag.tag)
+        .filter(DatasetTag.dataset_id.in_(dataset_ids))
+        .all()
+    ) if dataset_ids else []
+    tags_by_dataset: dict = {}
+    for dataset_id, tag_val in all_tags:
+        tags_by_dataset.setdefault(dataset_id, []).append(tag_val)
 
     # Convert to response schemas
     dataset_items = [
@@ -123,6 +230,9 @@ def list_datasets(
             last_scored_at=ds.last_scored_at,
             location_type=ds.location_type,
             location_data=ds.location_data,
+            classification=ds.classification,
+            domain=ds.domain,
+            tags=sorted(tags_by_dataset.get(ds.id, [])),
         )
         for ds in datasets
     ]
@@ -213,6 +323,59 @@ def update_metadata(
     db.commit()
     db.refresh(dataset)
 
+    return build_dataset_detail_response(db, dataset_id)
+
+
+@router.post("/{dataset_id}/tags", response_model=DatasetDetailResponse)
+def update_tags(
+    dataset_id: UUID,
+    request: UpdateTagsRequest,
+    db: Session = Depends(get_db),
+):
+    """Replace all tags on a dataset."""
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    logger.info("Updating tags for dataset %s", dataset_id)
+    # Delete existing tags
+    db.query(DatasetTag).filter(DatasetTag.dataset_id == dataset_id).delete()
+
+    # Create new tags
+    for tag_value in request.tags:
+        tag_value = tag_value.strip()
+        if tag_value:
+            db.add(DatasetTag(dataset_id=dataset_id, tag=tag_value))
+
+    db.commit()
+    return build_dataset_detail_response(db, dataset_id)
+
+
+@router.post("/{dataset_id}/classification", response_model=DatasetDetailResponse)
+def update_classification(
+    dataset_id: UUID,
+    request: UpdateClassificationRequest,
+    db: Session = Depends(get_db),
+):
+    """Update classification and domain for a dataset."""
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    logger.info("Updating classification for dataset %s", dataset_id)
+    if request.classification is not None:
+        valid_classifications = ["public", "internal", "confidential", "restricted"]
+        if request.classification and request.classification not in valid_classifications:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid classification. Must be one of: {', '.join(valid_classifications)}",
+            )
+        dataset.classification = request.classification or None
+
+    if request.domain is not None:
+        dataset.domain = request.domain or None
+
+    db.commit()
     return build_dataset_detail_response(db, dataset_id)
 
 

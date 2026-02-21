@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { DatasetDetail, ScoreHistory } from '../../../api/client'
+import { DatasetDetail, ScoreHistory, checkWatch, startWatching, stopWatching } from '../../../api/client'
 import {
   getStatusBadgeClass,
   getStatusLabel,
@@ -14,11 +15,12 @@ import ScoreAnalysisTab from './ScoreAnalysisTab'
 import SchemaTab from './SchemaTab'
 import LineageTab from './LineageTab'
 import DetailsTab from './DetailsTab'
+import QualityTab from './QualityTab'
 
 interface DatasetContentProps {
   dataset: DatasetDetail
-  activeTab: 'overview' | 'score' | 'schema' | 'lineage' | 'details'
-  setActiveTab: (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'details') => void
+  activeTab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details'
+  setActiveTab: (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details') => void
   historyData: ScoreHistory[]
   maxScore: number
   minScore: number
@@ -83,6 +85,16 @@ function formatLocationDisplay(dataset: DatasetDetail) {
   }
 }
 
+function getUserId(): string {
+  if (typeof window === 'undefined') return 'anonymous'
+  let userId = localStorage.getItem('ondo_user_id')
+  if (!userId) {
+    userId = 'user_' + Math.random().toString(36).substring(2, 10)
+    localStorage.setItem('ondo_user_id', userId)
+  }
+  return userId
+}
+
 export default function DatasetContent(props: DatasetContentProps) {
   const {
     dataset,
@@ -95,6 +107,33 @@ export default function DatasetContent(props: DatasetContentProps) {
   } = props
 
   const locationDisplay = formatLocationDisplay(dataset)
+  const [watching, setWatching] = useState(false)
+  const [watchLoading, setWatchLoading] = useState(false)
+
+  useEffect(() => {
+    const userId = getUserId()
+    checkWatch(dataset.id, userId)
+      .then((res) => setWatching(res.watching))
+      .catch(() => {})
+  }, [dataset.id])
+
+  const toggleWatch = async () => {
+    setWatchLoading(true)
+    try {
+      const userId = getUserId()
+      if (watching) {
+        await stopWatching(dataset.id, userId)
+        setWatching(false)
+      } else {
+        await startWatching(dataset.id, userId)
+        setWatching(true)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setWatchLoading(false)
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -127,9 +166,27 @@ export default function DatasetContent(props: DatasetContentProps) {
             )}
           </div>
           <div className="text-right">
-            <div className="text-5xl font-bold text-gray-900 mb-2">
-              {dataset.readiness_score}
-              <span className="text-2xl text-gray-500">/100</span>
+            <div className="flex items-center justify-end gap-3 mb-2">
+              <button
+                onClick={toggleWatch}
+                disabled={watchLoading}
+                className={
+                  'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ' +
+                  (watching
+                    ? 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                    : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100')
+                }
+                title={watching ? 'Stop watching' : 'Watch for changes'}
+              >
+                <svg className="w-3.5 h-3.5" fill={watching ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {watching ? 'Watching' : 'Watch'}
+              </button>
+              <div className="text-5xl font-bold text-gray-900">
+                {dataset.readiness_score}
+                <span className="text-2xl text-gray-500">/100</span>
+              </div>
             </div>
             <span
               className={'inline-flex px-3 py-1 text-sm font-semibold rounded-full ' + getStatusBadgeClass(
@@ -151,11 +208,12 @@ export default function DatasetContent(props: DatasetContentProps) {
               { id: 'score', label: 'Score Analysis' },
               { id: 'schema', label: 'Schema' },
               { id: 'lineage', label: 'Lineage' },
+              { id: 'quality', label: 'Quality Rules' },
               { id: 'details', label: 'Details' },
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as 'overview' | 'score' | 'schema' | 'lineage' | 'details')}
+                onClick={() => setActiveTab(tab.id as 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details')}
                 className={
                   'px-6 py-4 text-sm font-medium border-b-2 transition-colors ' +
                   (activeTab === tab.id
@@ -188,6 +246,9 @@ export default function DatasetContent(props: DatasetContentProps) {
         )}
         {activeTab === 'lineage' && (
           <LineageTab dataset={dataset} />
+        )}
+        {activeTab === 'quality' && (
+          <QualityTab dataset={dataset} />
         )}
         {activeTab === 'details' && (
           <DetailsTab dataset={dataset} />

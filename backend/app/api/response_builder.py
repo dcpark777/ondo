@@ -28,6 +28,7 @@ from app.models import (
     DatasetDimensionScore,
     DatasetReason,
     DatasetScoreHistory,
+    DatasetTag,
     DimensionKeyEnum,
     ReadinessStatusEnum,
 )
@@ -201,6 +202,15 @@ def build_dataset_detail_response(db: Session, dataset_id: UUID) -> DatasetDetai
         .all()
     )
 
+    # Get tags
+    tags = (
+        db.query(DatasetTag.tag)
+        .filter(DatasetTag.dataset_id == dataset_id)
+        .order_by(DatasetTag.tag)
+        .all()
+    )
+    tag_list = [t[0] for t in tags]
+
     return DatasetDetailResponse(
         id=dataset.id,
         full_name=dataset.full_name,
@@ -227,6 +237,9 @@ def build_dataset_detail_response(db: Session, dataset_id: UUID) -> DatasetDetai
         readiness_status=dataset.readiness_status.value
         if isinstance(dataset.readiness_status, ReadinessStatusEnum)
         else str(dataset.readiness_status),
+        classification=dataset.classification,
+        domain=dataset.domain,
+        tags=tag_list,
         dimension_scores=[dimension_score_to_response(ds) for ds in dimension_scores],
         reasons=[reason_to_response(r) for r in reasons],
         actions=[action_to_response(a) for a in actions],

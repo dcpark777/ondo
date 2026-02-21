@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism'
-import { DatasetDetail, generateProtobufSchema, generateScalaSchema, generatePythonSchema, getColumnLineage, ColumnLineageResponse } from '../../../api/client'
+import { DatasetDetail, generateProtobufSchema, generateScalaSchema, generatePythonSchema, getColumnLineage, ColumnLineageResponse, getDatasetProfiles, ColumnProfile } from '../../../api/client'
 
 interface SchemaTabProps {
   dataset: DatasetDetail
@@ -15,6 +15,10 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'schema' | 'tests'>('schema')
   const [columnLineageMap, setColumnLineageMap] = useState<Record<string, ColumnLineageResponse>>({})
   const [loadingColumnLineage, setLoadingColumnLineage] = useState<Record<string, boolean>>({})
+  const [profileMap, setProfileMap] = useState<Record<string, ColumnProfile>>({})
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+  const [profilesLoaded, setProfilesLoaded] = useState(false)
+  const [expandedProfile, setExpandedProfile] = useState<string | null>(null)
 
   return (
     <div className="space-y-6">
@@ -23,6 +27,30 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
           <h2 className="text-xl font-semibold text-gray-900">Data Schema</h2>
           {dataset.columns && dataset.columns.length > 0 && (
             <div className="flex space-x-2">
+              {!profilesLoaded && (
+                <button
+                  onClick={async () => {
+                    setLoadingProfiles(true)
+                    try {
+                      const profiles = await getDatasetProfiles(dataset.id)
+                      const map: Record<string, ColumnProfile> = {}
+                      for (const p of profiles) {
+                        map[p.column_name] = p
+                      }
+                      setProfileMap(map)
+                      setProfilesLoaded(true)
+                    } catch (err) {
+                      console.error('Failed to load profiles:', err)
+                    } finally {
+                      setLoadingProfiles(false)
+                    }
+                  }}
+                  disabled={loadingProfiles}
+                  className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loadingProfiles ? 'Loading...' : 'Load Profiles'}
+                </button>
+              )}
               <button
                 onClick={async () => {
                   setGeneratingSchema('protobuf')
@@ -100,11 +128,91 @@ export default function SchemaTab({ dataset }: SchemaTabProps) {
                 {dataset.columns.map((column) => {
                   const columnLineage = columnLineageMap[column.id]
                   const isLoadingColumnLineage = loadingColumnLineage[column.id]
+                  const profile = profileMap[column.name]
+                  const isExpanded = expandedProfile === column.id
 
                   return (
                     <tr key={column.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{column.name}</div>
+                        <div className="flex items-center">
+                          {profilesLoaded && (
+                            <button
+                              onClick={() => setExpandedProfile(isExpanded ? null : column.id)}
+                              className="mr-2 text-gray-400 hover:text-gray-600"
+                            >
+                              <svg className={'w-4 h-4 transition-transform ' + (isExpanded ? 'rotate-90' : '')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          )}
+                          <div className="text-sm font-medium text-gray-900">{column.name}</div>
+                        </div>
+                        {isExpanded && profile && (
+                          <div className="mt-3 ml-6 p-3 bg-purple-50 rounded-lg border border-purple-200 text-xs space-y-3">
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                              {profile.row_count != null && (
+                                <div><span className="font-medium text-gray-700">Rows:</span> <span className="text-gray-900">{profile.row_count.toLocaleString()}</span></div>
+                              )}
+                              {profile.null_percentage != null && (
+                                <div>
+                                  <span className="font-medium text-gray-700">Null %:</span> <span className="text-gray-900">{profile.null_percentage.toFixed(1)}%</span>
+                                  <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
+                                    <div className={'h-1.5 rounded-full ' + (profile.null_percentage > 50 ? 'bg-red-500' : profile.null_percentage > 10 ? 'bg-yellow-500' : 'bg-green-500')} style={{ width: `${Math.min(profile.null_percentage, 100)}%` }} />
+                                  </div>
+                                </div>
+                              )}
+                              {profile.distinct_count != null && (
+                                <div><span className="font-medium text-gray-700">Distinct:</span> <span className="text-gray-900">{profile.distinct_count.toLocaleString()}{profile.distinct_percentage != null && ` (${profile.distinct_percentage.toFixed(1)}%)`}</span></div>
+                              )}
+                              {profile.min_value != null && (
+                                <div><span className="font-medium text-gray-700">Min:</span> <span className="text-gray-900">{profile.min_value}</span></div>
+                              )}
+                              {profile.max_value != null && (
+                                <div><span className="font-medium text-gray-700">Max:</span> <span className="text-gray-900">{profile.max_value}</span></div>
+                              )}
+                              {profile.mean_value != null && (
+                                <div><span className="font-medium text-gray-700">Mean:</span> <span className="text-gray-900">{profile.mean_value.toFixed(2)}</span></div>
+                              )}
+                              {profile.median_value != null && (
+                                <div><span className="font-medium text-gray-700">Median:</span> <span className="text-gray-900">{profile.median_value.toFixed(2)}</span></div>
+                              )}
+                              {profile.stddev_value != null && (
+                                <div><span className="font-medium text-gray-700">Std Dev:</span> <span className="text-gray-900">{profile.stddev_value.toFixed(2)}</span></div>
+                              )}
+                              {profile.min_length != null && (
+                                <div><span className="font-medium text-gray-700">Length:</span> <span className="text-gray-900">{profile.min_length}–{profile.max_length}{profile.avg_length != null && ` (avg ${profile.avg_length.toFixed(1)})`}</span></div>
+                              )}
+                            </div>
+                            {profile.top_values && profile.top_values.length > 0 && (
+                              <div>
+                                <span className="font-medium text-gray-700">Top Values:</span>
+                                <div className="mt-1 space-y-1">
+                                  {profile.top_values.slice(0, 5).map((tv, idx) => {
+                                    const maxCount = profile.top_values![0].count
+                                    const pct = maxCount > 0 ? (tv.count / maxCount) * 100 : 0
+                                    return (
+                                      <div key={idx} className="flex items-center gap-2">
+                                        <span className="w-24 truncate text-gray-900" title={tv.value}>{tv.value}</span>
+                                        <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                          <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                                        </div>
+                                        <span className="text-gray-500 w-12 text-right">{tv.count.toLocaleString()}</span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            <div className="text-gray-400 pt-1 border-t border-purple-200">
+                              Profiled: {new Date(profile.profiled_at).toLocaleString()}
+                            </div>
+                          </div>
+                        )}
+                        {isExpanded && !profile && (
+                          <div className="mt-3 ml-6 p-3 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-500 italic">
+                            No profile data available for this column
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm text-gray-600">

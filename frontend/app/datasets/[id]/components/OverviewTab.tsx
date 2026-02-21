@@ -1,12 +1,15 @@
 'use client'
 
-import { DatasetDetail } from '../../../api/client'
+import { useState } from 'react'
+import { DatasetDetail, updateTags, updateClassification } from '../../../api/client'
 import {
   getStatusBadgeClass,
   getStatusLabel,
   getLocationIcon,
   getLocationLabel,
   getLocationBadgeColor,
+  getClassificationBadgeClass,
+  getClassificationLabel,
   formatDataSize,
   formatSLA,
 } from '../../../lib/dataset-utils'
@@ -46,6 +49,11 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab(props: OverviewTabProps) {
+  const [editingClassification, setEditingClassification] = useState(false)
+  const [classificationValue, setClassificationValue] = useState(props.dataset.classification || '')
+  const [domainValue, setDomainValue] = useState(props.dataset.domain || '')
+  const [newTag, setNewTag] = useState('')
+
   const {
     dataset,
     isEditingOwner,
@@ -442,6 +450,170 @@ export default function OverviewTab(props: OverviewTabProps) {
                 <p className="text-sm text-gray-900 mt-1">{dataset.owner_contact}</p>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Tags & Classification Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Tags & Classification</h2>
+          {!editingClassification && (
+            <button
+              onClick={() => setEditingClassification(true)}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        {editingClassification ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Classification</label>
+              <select
+                value={classificationValue}
+                onChange={(e) => setClassificationValue(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="">None</option>
+                <option value="public">Public</option>
+                <option value="internal">Internal</option>
+                <option value="confidential">Confidential</option>
+                <option value="restricted">Restricted</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Domain</label>
+              <input
+                type="text"
+                value={domainValue}
+                onChange={(e) => setDomainValue(e.target.value)}
+                placeholder="e.g., analytics, finance, engineering"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await updateClassification(dataset.id, {
+                      classification: classificationValue || null,
+                      domain: domainValue || null,
+                    })
+                    setEditingClassification(false)
+                    window.location.reload()
+                  } catch (err) {
+                    console.error('Failed to update classification:', err)
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setEditingClassification(false)
+                  setClassificationValue(dataset.classification || '')
+                  setDomainValue(dataset.domain || '')
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Classification</p>
+              {dataset.classification ? (
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${getClassificationBadgeClass(dataset.classification)}`}>
+                  {getClassificationLabel(dataset.classification)}
+                </span>
+              ) : (
+                <p className="text-sm text-gray-400 italic mt-1">Not classified</p>
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700">Domain</p>
+              <p className="text-sm text-gray-900 mt-1">
+                {dataset.domain || <span className="text-gray-400 italic">No domain</span>}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Tags</p>
+              <div className="flex flex-wrap gap-2">
+                {dataset.tags && dataset.tags.length > 0 ? (
+                  dataset.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700"
+                    >
+                      {tag}
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateTags(dataset.id, {
+                              tags: dataset.tags.filter((t) => t !== tag),
+                            })
+                            window.location.reload()
+                          } catch (err) {
+                            console.error('Failed to remove tag:', err)
+                          }
+                        }}
+                        className="ml-1 text-indigo-500 hover:text-indigo-800"
+                      >
+                        x
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-gray-400 italic">No tags</span>
+                )}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="Add tag..."
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && newTag.trim()) {
+                      try {
+                        await updateTags(dataset.id, {
+                          tags: [...(dataset.tags || []), newTag.trim()],
+                        })
+                        setNewTag('')
+                        window.location.reload()
+                      } catch (err) {
+                        console.error('Failed to add tag:', err)
+                      }
+                    }
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    if (newTag.trim()) {
+                      try {
+                        await updateTags(dataset.id, {
+                          tags: [...(dataset.tags || []), newTag.trim()],
+                        })
+                        setNewTag('')
+                        window.location.reload()
+                      } catch (err) {
+                        console.error('Failed to add tag:', err)
+                      }
+                    }
+                  }}
+                  className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

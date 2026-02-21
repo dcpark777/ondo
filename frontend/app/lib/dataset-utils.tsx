@@ -171,6 +171,41 @@ export function getLocationBadgeColor(locationType: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Classification helpers
+// ---------------------------------------------------------------------------
+export function getClassificationBadgeClass(classification: string | null): string {
+  if (!classification) return 'bg-gray-100 text-gray-600'
+  switch (classification) {
+    case 'public':
+      return 'bg-green-100 text-green-800'
+    case 'internal':
+      return 'bg-blue-100 text-blue-800'
+    case 'confidential':
+      return 'bg-orange-100 text-orange-800'
+    case 'restricted':
+      return 'bg-red-100 text-red-800'
+    default:
+      return 'bg-gray-100 text-gray-600'
+  }
+}
+
+export function getClassificationLabel(classification: string | null): string {
+  if (!classification) return ''
+  switch (classification) {
+    case 'public':
+      return 'Public'
+    case 'internal':
+      return 'Internal'
+    case 'confidential':
+      return 'Confidential'
+    case 'restricted':
+      return 'Restricted'
+    default:
+      return classification.charAt(0).toUpperCase() + classification.slice(1)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Formatters
 // ---------------------------------------------------------------------------
 export function formatDataSize(bytes: number | null): string {

@@ -44,24 +44,24 @@ export default function DatasetDetailPage() {
   const [applyingColumns, setApplyingColumns] = useState(false)
 
   // Tab state - read from URL on mount
-  const validTabs: Array<'overview' | 'score' | 'schema' | 'lineage' | 'details'> = ['overview', 'score', 'schema', 'lineage', 'details']
+  const validTabs: Array<'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details'> = ['overview', 'score', 'schema', 'lineage', 'quality', 'details']
   
   // Get initial tab from URL
-  const getTabFromUrl = (): 'overview' | 'score' | 'schema' | 'lineage' | 'details' => {
+  const getTabFromUrl = (): 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details' => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const tab = params.get('tab')
       if (tab && validTabs.includes(tab as any)) {
-        return tab as 'overview' | 'score' | 'schema' | 'lineage' | 'details'
+        return tab as 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details'
       }
     }
     return 'overview'
   }
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'schema' | 'lineage' | 'details'>(getTabFromUrl())
+  const [activeTab, setActiveTab] = useState<'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details'>(getTabFromUrl())
 
   // Update URL when tab changes
-  const handleTabChange = (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'details') => {
+  const handleTabChange = (tab: 'overview' | 'score' | 'schema' | 'lineage' | 'quality' | 'details') => {
     setActiveTab(tab)
     const params = new URLSearchParams(window.location.search)
     if (tab === 'overview') {

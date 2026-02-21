@@ -9,6 +9,7 @@ from enum import Enum as PyEnum
 from sqlalchemy import (
     Column,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -18,7 +19,7 @@ from sqlalchemy import (
     TIMESTAMP,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -59,9 +60,12 @@ class Dataset(Base):
     limitations = Column(Text, nullable=True)
     location_type = Column(String(50), nullable=True, index=True)  # e.g., 's3', 'databricks', 'snowflake', 'bigquery'
     location_data = Column(JSONB, nullable=True)  # Type-specific location data as JSON
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True)
+    created_by = Column(String(255), nullable=True)  # User who created the dataset
     last_seen_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
     last_scored_at = Column(TIMESTAMP(timezone=True), nullable=True)
     last_updated_at = Column(TIMESTAMP(timezone=True), nullable=True)  # When dataset was last updated/modified
+    updated_by = Column(String(255), nullable=True)  # User who last updated the dataset
     data_size_bytes = Column(BigInteger, nullable=True)  # Dataset size in bytes
     file_count = Column(Integer, nullable=True)  # Number of files (if applicable)
     partition_keys = Column(JSONB, nullable=True)  # Array of partition key column names
@@ -75,9 +79,16 @@ class Dataset(Base):
         index=True,
     )
 
+    classification = Column(String(50), nullable=True, index=True)  # public, internal, confidential, restricted
+    domain = Column(String(100), nullable=True, index=True)  # e.g., analytics, finance, engineering
+    search_vector = Column(TSVECTOR, nullable=True)  # Full-text search vector (auto-updated by trigger)
+
     # Relationships
     dimension_scores = relationship(
         "DatasetDimensionScore", back_populates="dataset", cascade="all, delete-orphan"
+    )
+    tags = relationship(
+        "DatasetTag", back_populates="dataset", cascade="all, delete-orphan"
     )
     reasons = relationship(
         "DatasetReason", back_populates="dataset", cascade="all, delete-orphan"
@@ -102,6 +113,9 @@ class Dataset(Base):
         foreign_keys="DatasetLineage.upstream_dataset_id",
         back_populates="upstream_dataset",
         cascade="all, delete-orphan"
+    )
+    quality_rules = relationship(
+        "QualityRule", back_populates="dataset", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
@@ -233,6 +247,9 @@ class DatasetColumn(Base):
         back_populates="upstream_column",
         cascade="all, delete-orphan"
     )
+    profiles = relationship(
+        "ColumnProfile", back_populates="column", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("dataset_id", "name", name="uq_dataset_column"),
@@ -345,5 +362,230 @@ class ColumnLineage(Base):
         UniqueConstraint("upstream_column_id", "downstream_column_id", name="uq_column_lineage"),
         Index("idx_column_lineage_upstream", "upstream_column_id"),
         Index("idx_column_lineage_downstream", "downstream_column_id"),
+    )
+
+
+class DatasetTag(Base):
+    """Tags for datasets."""
+
+    __tablename__ = "dataset_tags"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tag = Column(String(100), nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    dataset = relationship("Dataset", back_populates="tags")
+
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "tag", name="uq_dataset_tag"),
+    )
+
+
+class QualityRule(Base):
+    """Quality rules for datasets."""
+
+    __tablename__ = "quality_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    rule_type = Column(String(50), nullable=False)
+    column_name = Column(String(255), nullable=True)
+    parameters = Column(JSONB, nullable=True)
+    severity = Column(String(20), nullable=False, default="warning", server_default="warning")
+    enabled = Column(Integer, nullable=False, default=1, server_default="1")
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+    created_by = Column(String(255), nullable=True)
+
+    # Relationships
+    dataset = relationship("Dataset", back_populates="quality_rules")
+    executions = relationship(
+        "QualityRuleExecution", back_populates="rule", cascade="all, delete-orphan"
+    )
+
+
+class QualityRuleExecution(Base):
+    """Execution results for quality rules."""
+
+    __tablename__ = "quality_rule_executions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("quality_rules.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    passed = Column(Integer, nullable=False)  # 1=True, 0=False
+    records_checked = Column(Integer, nullable=True)
+    records_failed = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    executed_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True
+    )
+
+    # Relationships
+    rule = relationship("QualityRule", back_populates="executions")
+    dataset = relationship("Dataset")
+
+
+class GlossaryTerm(Base):
+    """Business glossary term."""
+
+    __tablename__ = "glossary_terms"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), unique=True, nullable=False, index=True)
+    definition = Column(Text, nullable=False)
+    domain = Column(String(100), nullable=True, index=True)
+    owner = Column(String(255), nullable=True)
+    status = Column(String(50), nullable=False, default="draft", server_default="draft")
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    column_links = relationship(
+        "GlossaryColumnLink", back_populates="term", cascade="all, delete-orphan"
+    )
+
+
+class GlossaryColumnLink(Base):
+    """Link between glossary term and dataset column."""
+
+    __tablename__ = "glossary_column_links"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    term_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("glossary_terms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    column_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dataset_columns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    term = relationship("GlossaryTerm", back_populates="column_links")
+    column = relationship("DatasetColumn")
+
+    __table_args__ = (
+        UniqueConstraint("term_id", "column_id", name="uq_glossary_column_link"),
+    )
+
+
+class DatasetWatch(Base):
+    """Dataset watch subscriptions."""
+
+    __tablename__ = "dataset_watches"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(String(255), nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    dataset = relationship("Dataset")
+
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "user_id", name="uq_dataset_watch"),
+    )
+
+
+class Notification(Base):
+    """User notifications."""
+
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(String(255), nullable=False, index=True)
+    notification_type = Column(String(50), nullable=False)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    read = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True)
+
+    # Relationships
+    dataset = relationship("Dataset")
+
+
+class ColumnProfile(Base):
+    """Profiling statistics for a dataset column."""
+
+    __tablename__ = "column_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    column_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dataset_columns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    row_count = Column(Integer, nullable=True)
+    null_count = Column(Integer, nullable=True)
+    null_percentage = Column(Float, nullable=True)
+    distinct_count = Column(Integer, nullable=True)
+    distinct_percentage = Column(Float, nullable=True)
+    min_value = Column(String(255), nullable=True)
+    max_value = Column(String(255), nullable=True)
+    mean_value = Column(Float, nullable=True)
+    median_value = Column(Float, nullable=True)
+    stddev_value = Column(Float, nullable=True)
+    min_length = Column(Integer, nullable=True)
+    max_length = Column(Integer, nullable=True)
+    avg_length = Column(Float, nullable=True)
+    top_values = Column(JSONB, nullable=True)  # [{"value": "X", "count": 100}]
+    sample_values = Column(JSONB, nullable=True)
+    profiled_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True
+    )
+
+    # Relationships
+    column = relationship("DatasetColumn", back_populates="profiles")
+    dataset = relationship("Dataset")
+
+    __table_args__ = (
+        Index("idx_column_profiles_dataset_profiled", "dataset_id", "profiled_at"),
+        Index("idx_column_profiles_column_profiled", "column_id", "profiled_at"),
     )
 

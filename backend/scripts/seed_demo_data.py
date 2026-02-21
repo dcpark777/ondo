@@ -23,6 +23,7 @@ from app.models import (
     DatasetReason,
     DatasetScoreHistory,
     DatasetLineage,
+    DatasetTag,
     ColumnLineage,
     DimensionKeyEnum,
     ReadinessStatusEnum,
@@ -68,6 +69,7 @@ def create_demo_datasets(db: Session, force: bool = False):
         db.query(DatasetReason).delete()
         db.query(DatasetDimensionScore).delete()
         db.query(DatasetColumn).delete()
+        db.query(DatasetTag).delete()
         db.query(Dataset).delete()
         db.commit()
 
@@ -107,6 +109,9 @@ def create_demo_datasets(db: Session, force: bool = False):
                 "table": "USERS",
                 "warehouse": "COMPUTE_WH"
             },
+            "classification": "confidential",
+            "domain": "analytics",
+            "tags": ["pii", "core", "tier-1"],
         },
         {
             "name": "analytics.events",
@@ -139,6 +144,9 @@ def create_demo_datasets(db: Session, force: bool = False):
                 "schema": "analytics",
                 "table": "events"
             },
+            "classification": "internal",
+            "domain": "analytics",
+            "tags": ["streaming", "clickstream"],
         },
         {
             "name": "staging.raw_logs",
@@ -166,6 +174,9 @@ def create_demo_datasets(db: Session, force: bool = False):
                 "prefix": "staging/raw_logs",
                 "region": "us-east-1"
             },
+            "classification": "internal",
+            "domain": "engineering",
+            "tags": ["raw", "staging"],
         },
         {
             "name": "analytics.revenue",
@@ -196,6 +207,9 @@ def create_demo_datasets(db: Session, force: bool = False):
                 "dataset": "analytics",
                 "table": "revenue"
             },
+            "classification": "restricted",
+            "domain": "finance",
+            "tags": ["core", "tier-1", "financial"],
         },
         {
             "name": "experiments.ab_test_results",
@@ -219,6 +233,9 @@ def create_demo_datasets(db: Session, force: bool = False):
                 "database": "experiments",
                 "table": "ab_test_results"
             },
+            "classification": "internal",
+            "domain": "analytics",
+            "tags": ["experiments"],
         },
         {
             "name": "analytics.product_catalog",
@@ -247,6 +264,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["category"],
             "sla_hours": 6,
             "producing_job": "product_catalog_sync",
+            "classification": "public",
+            "domain": "analytics",
+            "tags": ["catalog", "core"],
         },
         {
             "name": "ml.feature_store",
@@ -273,6 +293,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["computed_at"],
             "sla_hours": 24,
             "producing_job": "feature_computation_pipeline",
+            "classification": "confidential",
+            "domain": "engineering",
+            "tags": ["ml", "features"],
         },
         {
             "name": "analytics.customer_segments",
@@ -299,6 +322,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["cohort_month", "segment"],
             "sla_hours": 168,  # Weekly
             "producing_job": "customer_segmentation_weekly",
+            "classification": "confidential",
+            "domain": "analytics",
+            "tags": ["marketing", "segments"],
         },
         {
             "name": "analytics.page_views",
@@ -325,6 +351,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["timestamp"],
             "sla_hours": 1,
             "producing_job": "page_view_tracking_stream",
+            "classification": "internal",
+            "domain": "analytics",
+            "tags": ["clickstream", "web"],
         },
         {
             "name": "analytics.orders",
@@ -354,6 +383,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["order_date"],
             "sla_hours": 6,
             "producing_job": "order_processing_pipeline",
+            "classification": "restricted",
+            "domain": "finance",
+            "tags": ["core", "tier-1", "ecommerce"],
         },
         {
             "name": "staging.api_logs",
@@ -382,6 +414,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["timestamp", "endpoint"],
             "sla_hours": 1,
             "producing_job": "api_log_aggregator",
+            "classification": "internal",
+            "domain": "engineering",
+            "tags": ["raw", "monitoring"],
         },
         {
             "name": "analytics.user_activity",
@@ -409,6 +444,9 @@ def create_demo_datasets(db: Session, force: bool = False):
             "partition_keys": ["activity_date"],
             "sla_hours": 24,
             "producing_job": "user_activity_aggregation",
+            "classification": "internal",
+            "domain": "analytics",
+            "tags": ["core", "engagement"],
         },
     ]
 
@@ -460,11 +498,17 @@ def create_demo_datasets(db: Session, force: bool = False):
             producing_job=config.get("producing_job"),
             location_type=config.get("location_type"),
             location_data=config.get("location_data"),
+            classification=config.get("classification"),
+            domain=config.get("domain"),
             readiness_score=score_result.total_score,
             readiness_status=score_result.status.value,  # Pass value string directly
         )
         db.add(dataset)
         db.flush()  # Get the ID
+
+        # Create tags
+        for tag_value in config.get("tags", []):
+            db.add(DatasetTag(dataset_id=dataset.id, tag=tag_value))
 
         # Create dimension scores
         for dim_score in score_result.dimension_scores:

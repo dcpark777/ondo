@@ -14,6 +14,9 @@ export interface DatasetListItem {
   last_scored_at: string | null
   location_type: string | null
   location_data: Record<string, any> | null
+  classification: string | null
+  domain: string | null
+  tags: string[]
 }
 
 export interface DatasetListResponse {
@@ -24,6 +27,10 @@ export interface DatasetListResponse {
 export interface ListDatasetsParams {
   status?: string
   owner?: string
+  location_type?: string
+  classification?: string
+  domain?: string
+  tag?: string
   q?: string
 }
 
@@ -78,9 +85,12 @@ export interface DatasetDetail {
   limitations: string | null
   location_type: string | null
   location_data: Record<string, any> | null
+  created_at: string
+  created_by: string | null
   last_seen_at: string
   last_scored_at: string | null
   last_updated_at: string | null
+  updated_by: string | null
   data_size_bytes: number | null
   file_count: number | null
   partition_keys: string[] | null
@@ -88,6 +98,9 @@ export interface DatasetDetail {
   producing_job: string | null
   readiness_score: number
   readiness_status: string
+  classification: string | null
+  domain: string | null
+  tags: string[]
   dimension_scores: DimensionScore[]
   reasons: Reason[]
   actions: Action[]
@@ -115,6 +128,10 @@ export async function listDatasets(
   const searchParams = new URLSearchParams()
   if (params.status) searchParams.append('status', params.status)
   if (params.owner) searchParams.append('owner', params.owner)
+  if (params.location_type) searchParams.append('location_type', params.location_type)
+  if (params.classification) searchParams.append('classification', params.classification)
+  if (params.domain) searchParams.append('domain', params.domain)
+  if (params.tag) searchParams.append('tag', params.tag)
   if (params.q) searchParams.append('q', params.q)
 
   const url = `${API_URL}/api/datasets${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
@@ -473,7 +490,7 @@ export async function getDatasetLineage(id: string): Promise<DatasetLineageRespo
  */
 export async function getColumnLineage(datasetId: string, columnId: string): Promise<ColumnLineageResponse> {
   const url = `${API_URL}/api/datasets/${datasetId}/columns/${columnId}/lineage`
-  
+
   const response = await fetch(url, {
     method: 'GET',
     headers: {
@@ -486,4 +503,534 @@ export async function getColumnLineage(datasetId: string, columnId: string): Pro
   }
 
   return response.json()
+}
+
+/**
+ * Tags & Classification
+ */
+
+export interface UpdateTagsRequest {
+  tags: string[]
+}
+
+export interface UpdateClassificationRequest {
+  classification?: string | null
+  domain?: string | null
+}
+
+export async function updateTags(id: string, data: UpdateTagsRequest): Promise<DatasetDetail> {
+  const url = `${API_URL}/api/datasets/${id}/tags`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to update tags: ${response.statusText}`)
+  return response.json()
+}
+
+export async function updateClassification(id: string, data: UpdateClassificationRequest): Promise<DatasetDetail> {
+  const url = `${API_URL}/api/datasets/${id}/classification`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to update classification: ${response.statusText}`)
+  return response.json()
+}
+
+export async function listAllTags(): Promise<string[]> {
+  const url = `${API_URL}/api/datasets/meta/tags`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to list tags: ${response.statusText}`)
+  return response.json()
+}
+
+export async function listAllDomains(): Promise<string[]> {
+  const url = `${API_URL}/api/datasets/meta/domains`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to list domains: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Dashboard
+ */
+
+export interface DashboardSummary {
+  total_datasets: number
+  average_score: number
+  status_distribution: Record<string, number>
+  score_distribution: Record<string, number>
+  top_actions: {
+    action_key: string
+    title: string
+    total_gain: number
+    dataset_count: number
+  }[]
+  lowest_scoring: {
+    id: string
+    display_name: string
+    full_name: string
+    readiness_score: number
+    readiness_status: string
+  }[]
+  recently_scored: {
+    id: string
+    display_name: string
+    full_name: string
+    readiness_score: number
+    readiness_status: string
+    last_scored_at: string | null
+  }[]
+  dimension_health: Record<string, number>
+}
+
+export interface DashboardTrends {
+  days: number
+  trends: {
+    date: string
+    avg_score: number
+    count: number
+  }[]
+}
+
+export async function getDashboardSummary(): Promise<DashboardSummary> {
+  const url = `${API_URL}/api/dashboard/summary`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch dashboard summary: ${response.statusText}`)
+  return response.json()
+}
+
+export async function getDashboardTrends(days: number = 30): Promise<DashboardTrends> {
+  const url = `${API_URL}/api/dashboard/trends?days=${days}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch dashboard trends: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Quality Rules
+ */
+
+export interface QualityRuleExecution {
+  id: string
+  rule_id: string
+  dataset_id: string
+  passed: boolean
+  records_checked: number | null
+  records_failed: number | null
+  error_message: string | null
+  executed_at: string
+}
+
+export interface QualityRule {
+  id: string
+  dataset_id: string
+  name: string
+  description: string | null
+  rule_type: string
+  column_name: string | null
+  parameters: Record<string, any> | null
+  severity: string
+  enabled: boolean
+  created_at: string
+  created_by: string | null
+  latest_execution: QualityRuleExecution | null
+}
+
+export interface QualityRuleCreateRequest {
+  name: string
+  description?: string
+  rule_type: string
+  column_name?: string
+  parameters?: Record<string, any>
+  severity?: string
+  enabled?: boolean
+  created_by?: string
+}
+
+export interface QualityRuleUpdateRequest {
+  name?: string
+  description?: string
+  rule_type?: string
+  column_name?: string
+  parameters?: Record<string, any>
+  severity?: string
+  enabled?: boolean
+}
+
+export interface QualityRuleExecutionCreateRequest {
+  passed: boolean
+  records_checked?: number
+  records_failed?: number
+  error_message?: string
+}
+
+export interface BatchExecutionItem {
+  rule_id: string
+  passed: boolean
+  records_checked?: number
+  records_failed?: number
+  error_message?: string
+}
+
+export interface BatchExecutionRequest {
+  executions: BatchExecutionItem[]
+}
+
+/**
+ * List quality rules for a dataset
+ */
+export async function listQualityRules(datasetId: string): Promise<QualityRule[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules`
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Failed to fetch quality rules: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Create a quality rule for a dataset
+ */
+export async function createQualityRule(
+  datasetId: string,
+  data: QualityRuleCreateRequest
+): Promise<QualityRule> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to create quality rule: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Update a quality rule
+ */
+export async function updateQualityRule(
+  datasetId: string,
+  ruleId: string,
+  data: QualityRuleUpdateRequest
+): Promise<QualityRule> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules/${ruleId}`
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to update quality rule: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Delete a quality rule
+ */
+export async function deleteQualityRule(
+  datasetId: string,
+  ruleId: string
+): Promise<void> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules/${ruleId}`
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Failed to delete quality rule: ${response.statusText}`)
+}
+
+/**
+ * Record an execution result for a quality rule
+ */
+export async function recordRuleExecution(
+  datasetId: string,
+  ruleId: string,
+  data: QualityRuleExecutionCreateRequest
+): Promise<QualityRuleExecution> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules/${ruleId}/execute`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to record execution: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Record batch execution results
+ */
+export async function recordBatchExecution(
+  datasetId: string,
+  data: BatchExecutionRequest
+): Promise<QualityRuleExecution[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules/execute-batch`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to record batch execution: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Get execution history for a quality rule
+ */
+export async function getExecutionHistory(
+  datasetId: string,
+  ruleId: string,
+  limit: number = 30
+): Promise<QualityRuleExecution[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/quality-rules/${ruleId}/history?limit=${limit}`
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!response.ok) throw new Error(`Failed to fetch execution history: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Data Profiling
+ */
+
+export interface ColumnProfile {
+  id: string
+  column_id: string
+  dataset_id: string
+  column_name: string
+  row_count: number | null
+  null_count: number | null
+  null_percentage: number | null
+  distinct_count: number | null
+  distinct_percentage: number | null
+  min_value: string | null
+  max_value: string | null
+  mean_value: number | null
+  median_value: number | null
+  stddev_value: number | null
+  min_length: number | null
+  max_length: number | null
+  avg_length: number | null
+  top_values: { value: string; count: number }[] | null
+  sample_values: any[] | null
+  profiled_at: string
+}
+
+export interface ColumnProfileSubmit {
+  column_name: string
+  row_count?: number
+  null_count?: number
+  null_percentage?: number
+  distinct_count?: number
+  distinct_percentage?: number
+  min_value?: string
+  max_value?: string
+  mean_value?: number
+  median_value?: number
+  stddev_value?: number
+  min_length?: number
+  max_length?: number
+  avg_length?: number
+  top_values?: { value: string; count: number }[]
+  sample_values?: any[]
+}
+
+export async function getDatasetProfiles(datasetId: string): Promise<ColumnProfile[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/profiles`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch profiles: ${response.statusText}`)
+  return response.json()
+}
+
+export async function submitProfiles(datasetId: string, profiles: ColumnProfileSubmit[]): Promise<ColumnProfile[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/profiles`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profiles }),
+  })
+  if (!response.ok) throw new Error(`Failed to submit profiles: ${response.statusText}`)
+  return response.json()
+}
+
+export async function getProfileHistory(datasetId: string, columnName: string, limit: number = 10): Promise<ColumnProfile[]> {
+  const url = `${API_URL}/api/datasets/${datasetId}/profiles/history?column_name=${encodeURIComponent(columnName)}&limit=${limit}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch profile history: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Business Glossary
+ */
+
+export interface GlossaryTerm {
+  id: string
+  name: string
+  definition: string
+  domain: string | null
+  owner: string | null
+  status: string
+  created_at: string
+  updated_at: string
+  linked_columns_count: number
+  linked_columns: {
+    link_id: string
+    column_id: string
+    column_name: string
+    dataset_id: string
+    dataset_name: string
+  }[]
+}
+
+export interface GlossaryTermCreateRequest {
+  name: string
+  definition: string
+  domain?: string
+  owner?: string
+  status?: string
+}
+
+export interface GlossaryTermUpdateRequest {
+  name?: string
+  definition?: string
+  domain?: string
+  owner?: string
+  status?: string
+}
+
+export async function listGlossaryTerms(params?: { q?: string; domain?: string; status?: string }): Promise<GlossaryTerm[]> {
+  const searchParams = new URLSearchParams()
+  if (params?.q) searchParams.append('q', params.q)
+  if (params?.domain) searchParams.append('domain', params.domain)
+  if (params?.status) searchParams.append('status', params.status)
+  const url = `${API_URL}/api/glossary${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch glossary terms: ${response.statusText}`)
+  return response.json()
+}
+
+export async function createGlossaryTerm(data: GlossaryTermCreateRequest): Promise<GlossaryTerm> {
+  const url = `${API_URL}/api/glossary`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to create glossary term: ${response.statusText}`)
+  return response.json()
+}
+
+export async function getGlossaryTerm(termId: string): Promise<GlossaryTerm> {
+  const url = `${API_URL}/api/glossary/${termId}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch glossary term: ${response.statusText}`)
+  return response.json()
+}
+
+export async function updateGlossaryTerm(termId: string, data: GlossaryTermUpdateRequest): Promise<GlossaryTerm> {
+  const url = `${API_URL}/api/glossary/${termId}`
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) throw new Error(`Failed to update glossary term: ${response.statusText}`)
+  return response.json()
+}
+
+export async function deleteGlossaryTerm(termId: string): Promise<void> {
+  const url = `${API_URL}/api/glossary/${termId}`
+  const response = await fetch(url, { method: 'DELETE' })
+  if (!response.ok) throw new Error(`Failed to delete glossary term: ${response.statusText}`)
+}
+
+export async function linkTermToColumn(termId: string, columnId: string): Promise<void> {
+  const url = `${API_URL}/api/glossary/${termId}/columns/${columnId}`
+  const response = await fetch(url, { method: 'POST' })
+  if (!response.ok) throw new Error(`Failed to link term to column: ${response.statusText}`)
+}
+
+export async function unlinkTermFromColumn(termId: string, columnId: string): Promise<void> {
+  const url = `${API_URL}/api/glossary/${termId}/columns/${columnId}`
+  const response = await fetch(url, { method: 'DELETE' })
+  if (!response.ok) throw new Error(`Failed to unlink term from column: ${response.statusText}`)
+}
+
+/**
+ * Facets
+ */
+
+export interface DatasetFacets {
+  status: Record<string, number>
+  classification: Record<string, number>
+  domain: Record<string, number>
+  location_type: Record<string, number>
+  tags: Record<string, number>
+}
+
+export async function getDatasetFacets(): Promise<DatasetFacets> {
+  const url = `${API_URL}/api/datasets/meta/facets`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch facets: ${response.statusText}`)
+  return response.json()
+}
+
+/**
+ * Watches & Notifications
+ */
+
+export interface NotificationItem {
+  id: string
+  dataset_id: string
+  user_id: string
+  notification_type: string
+  title: string
+  message: string
+  read: boolean
+  created_at: string
+}
+
+export async function checkWatch(datasetId: string, userId: string): Promise<{ watching: boolean }> {
+  const url = `${API_URL}/api/datasets/${datasetId}/watch?user_id=${encodeURIComponent(userId)}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to check watch: ${response.statusText}`)
+  return response.json()
+}
+
+export async function startWatching(datasetId: string, userId: string): Promise<{ watching: boolean }> {
+  const url = `${API_URL}/api/datasets/${datasetId}/watch?user_id=${encodeURIComponent(userId)}`
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to start watching: ${response.statusText}`)
+  return response.json()
+}
+
+export async function stopWatching(datasetId: string, userId: string): Promise<{ watching: boolean }> {
+  const url = `${API_URL}/api/datasets/${datasetId}/watch?user_id=${encodeURIComponent(userId)}`
+  const response = await fetch(url, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to stop watching: ${response.statusText}`)
+  return response.json()
+}
+
+export async function listNotifications(userId: string, unreadOnly: boolean = false): Promise<NotificationItem[]> {
+  const url = `${API_URL}/api/notifications?user_id=${encodeURIComponent(userId)}${unreadOnly ? '&unread_only=true' : ''}`
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+  if (!response.ok) throw new Error(`Failed to fetch notifications: ${response.statusText}`)
+  return response.json()
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  const url = `${API_URL}/api/notifications/${notificationId}/read`
+  const response = await fetch(url, { method: 'POST' })
+  if (!response.ok) throw new Error(`Failed to mark notification as read: ${response.statusText}`)
+}
+
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  const url = `${API_URL}/api/notifications/read-all?user_id=${encodeURIComponent(userId)}`
+  const response = await fetch(url, { method: 'POST' })
+  if (!response.ok) throw new Error(`Failed to mark all as read: ${response.statusText}`)
 }

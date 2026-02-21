@@ -2,13 +2,15 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { listDatasets, DatasetListItem, ListDatasetsParams } from '../api/client'
+import { listDatasets, DatasetListItem, ListDatasetsParams, getDatasetFacets, DatasetFacets } from '../api/client'
 import {
   getStatusBadgeClass,
   getStatusLabel,
   getLocationIcon,
   getLocationLabel,
   getLocationBadgeColor,
+  getClassificationBadgeClass,
+  getClassificationLabel,
 } from '../lib/dataset-utils'
 
 type SortField = 'dataset' | 'score' | 'status' | 'owner' | 'last_scored'
@@ -28,17 +30,33 @@ export default function DatasetsPage() {
   const [ownerSearchQuery, setOwnerSearchQuery] = useState<string>('')
   const [locationFilter, setLocationFilter] = useState<string[]>([])
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false)
+  const [classificationFilter, setClassificationFilter] = useState<string[]>([])
+  const [classificationDropdownOpen, setClassificationDropdownOpen] = useState(false)
+  const [domainFilter, setDomainFilter] = useState<string[]>([])
+  const [domainDropdownOpen, setDomainDropdownOpen] = useState(false)
+  const [tagFilter, setTagFilter] = useState<string[]>([])
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [datasetFilter, setDatasetFilter] = useState<string[]>([])
   const [datasetDropdownOpen, setDatasetDropdownOpen] = useState(false)
   const [datasetSearchQuery, setDatasetSearchQuery] = useState<string>('')
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const ownerDropdownRef = useRef<HTMLDivElement>(null)
   const locationDropdownRef = useRef<HTMLDivElement>(null)
+  const classificationDropdownRef = useRef<HTMLDivElement>(null)
+  const domainDropdownRef = useRef<HTMLDivElement>(null)
+  const tagDropdownRef = useRef<HTMLDivElement>(null)
   const datasetDropdownRef = useRef<HTMLDivElement>(null)
   
   // Sort state
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+
+  // Facets state
+  const [facets, setFacets] = useState<DatasetFacets | null>(null)
+
+  useEffect(() => {
+    getDatasetFacets().then(setFacets).catch(() => {})
+  }, [])
 
   // Fetch datasets
   const fetchDatasets = async () => {
@@ -50,6 +68,9 @@ export default function DatasetsPage() {
       if (statusFilter.length > 0) params.status = statusFilter.join(',')
       if (ownerFilter.length > 0) params.owner = ownerFilter.join(',')
       if (locationFilter.length > 0) params.location_type = locationFilter.join(',')
+      if (classificationFilter.length > 0) params.classification = classificationFilter.join(',')
+      if (domainFilter.length > 0) params.domain = domainFilter.join(',')
+      if (tagFilter.length > 0) params.tag = tagFilter.join(',')
       if (datasetFilter.length > 0) params.q = datasetFilter.join(',')
 
       const response = await listDatasets(params)
@@ -65,7 +86,7 @@ export default function DatasetsPage() {
 
   useEffect(() => {
     fetchDatasets()
-  }, [statusFilter, ownerFilter, locationFilter, datasetFilter])
+  }, [statusFilter, ownerFilter, locationFilter, classificationFilter, domainFilter, tagFilter, datasetFilter])
 
   // Get unique owners from datasets
   const uniqueOwners = Array.from(
@@ -75,6 +96,21 @@ export default function DatasetsPage() {
   // Get unique location types from datasets
   const uniqueLocationTypes = Array.from(
     new Set(datasets.map(d => d.location_type).filter((type): type is string => Boolean(type)))
+  ).sort()
+
+  // Get unique classifications from datasets
+  const uniqueClassifications = Array.from(
+    new Set(datasets.map(d => d.classification).filter((c): c is string => Boolean(c)))
+  ).sort()
+
+  // Get unique domains from datasets
+  const uniqueDomains = Array.from(
+    new Set(datasets.map(d => d.domain).filter((d): d is string => Boolean(d)))
+  ).sort()
+
+  // Get unique tags from datasets
+  const uniqueTags = Array.from(
+    new Set(datasets.flatMap(d => d.tags || []))
   ).sort()
 
   // Filter owners based on search query
@@ -111,6 +147,15 @@ export default function DatasetsPage() {
       }
       if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
         setLocationDropdownOpen(false)
+      }
+      if (classificationDropdownRef.current && !classificationDropdownRef.current.contains(event.target as Node)) {
+        setClassificationDropdownOpen(false)
+      }
+      if (domainDropdownRef.current && !domainDropdownRef.current.contains(event.target as Node)) {
+        setDomainDropdownOpen(false)
+      }
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
+        setTagDropdownOpen(false)
       }
       if (datasetDropdownRef.current && !datasetDropdownRef.current.contains(event.target as Node)) {
         setDatasetDropdownOpen(false)
@@ -231,7 +276,7 @@ export default function DatasetsPage() {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           {/* Status Filter */}
           <div className="relative" ref={statusDropdownRef}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -290,6 +335,7 @@ export default function DatasetsPage() {
                       />
                       <span className="ml-2 text-sm text-gray-700">
                         {status === 'production_ready' ? 'Production Ready' : status.charAt(0).toUpperCase() + status.slice(1)}
+                        {facets?.status[status] != null && <span className="text-gray-400 ml-1">({facets.status[status]})</span>}
                       </span>
                     </label>
                   ))}
@@ -440,6 +486,138 @@ export default function DatasetsPage() {
             )}
           </div>
 
+          {/* Classification Filter */}
+          <div className="relative" ref={classificationDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Classification
+            </label>
+            <button
+              type="button"
+              onClick={() => setClassificationDropdownOpen(!classificationDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-700">
+                {classificationFilter.length === 0
+                  ? 'All'
+                  : classificationFilter.length === 1
+                  ? getClassificationLabel(classificationFilter[0])
+                  : `${classificationFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${classificationDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {classificationDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={classificationFilter.length === 0} onChange={(e) => { if (e.target.checked) setClassificationFilter([]) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {['public', 'internal', 'confidential', 'restricted'].map((cls) => (
+                    <label key={cls} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={classificationFilter.includes(cls)} onChange={(e) => { if (e.target.checked) setClassificationFilter([...classificationFilter, cls]); else setClassificationFilter(classificationFilter.filter(c => c !== cls)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                      <span className="ml-2 text-sm text-gray-700">{getClassificationLabel(cls)}{facets?.classification[cls] != null && <span className="text-gray-400 ml-1">({facets.classification[cls]})</span>}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Domain Filter */}
+          <div className="relative" ref={domainDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Domain
+            </label>
+            <button
+              type="button"
+              onClick={() => setDomainDropdownOpen(!domainDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-700">
+                {domainFilter.length === 0
+                  ? 'All'
+                  : domainFilter.length === 1
+                  ? domainFilter[0]
+                  : `${domainFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${domainDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {domainDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={domainFilter.length === 0} onChange={(e) => { if (e.target.checked) setDomainFilter([]) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {uniqueDomains.map((d) => (
+                    <label key={d} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={domainFilter.includes(d)} onChange={(e) => { if (e.target.checked) setDomainFilter([...domainFilter, d]); else setDomainFilter(domainFilter.filter(x => x !== d)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                      <span className="ml-2 text-sm text-gray-700">{d}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tag Filter */}
+          <div className="relative" ref={tagDropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tags
+            </label>
+            <button
+              type="button"
+              onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
+              className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-700">
+                {tagFilter.length === 0
+                  ? 'All'
+                  : tagFilter.length === 1
+                  ? tagFilter[0]
+                  : `${tagFilter.length} selected`}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${tagDropdownOpen ? 'transform rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {tagDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                <div className="py-1">
+                  <label className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={tagFilter.length === 0} onChange={(e) => { if (e.target.checked) setTagFilter([]) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                    <span className="ml-2 text-sm text-gray-700">All</span>
+                  </label>
+                  {uniqueTags.map((t) => (
+                    <label key={t} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={tagFilter.includes(t)} onChange={(e) => { if (e.target.checked) setTagFilter([...tagFilter, t]); else setTagFilter(tagFilter.filter(x => x !== t)) }} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                      <span className="ml-2 text-sm text-gray-700">{t}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Dataset Search */}
           <div className="relative" ref={datasetDropdownRef}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -578,7 +756,10 @@ export default function DatasetsPage() {
                       {getSortIcon('owner')}
                     </div>
                   </th>
-                  <th 
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tags
+                  </th>
+                  <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('last_scored')}
                   >
@@ -592,7 +773,7 @@ export default function DatasetsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedDatasets.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                       No datasets found
                     </td>
                   </tr>
@@ -649,6 +830,22 @@ export default function DatasetsPage() {
                         {dataset.owner_name || (
                           <span className="text-gray-400 italic">No owner</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          {dataset.tags && dataset.tags.length > 0 ? (
+                            dataset.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700"
+                              >
+                                {tag}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">No tags</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(dataset.last_scored_at)}

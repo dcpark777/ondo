@@ -17,7 +17,9 @@ from app.models import (
     DatasetDimensionScore,
     DatasetReason,
     DatasetScoreHistory,
+    DatasetWatch,
     DimensionKeyEnum,
+    Notification,
     ReadinessStatusEnum,
 )
 from app.scoring.engine import score_dataset
@@ -41,6 +43,7 @@ def score_and_save_dataset(
     """
     # Score the dataset
     logger.info("Scoring dataset %s", dataset.id)
+    old_score = dataset.readiness_score
     score_result = score_dataset(metadata)
 
     # Update dataset with score
@@ -113,6 +116,51 @@ def score_and_save_dataset(
     )
     db.add(history)
 
+    # Generate notifications if score changed
+    if old_score != score_result.total_score:
+        _create_score_change_notifications(
+            db, dataset, old_score, score_result.total_score
+        )
+
     logger.info("Dataset %s scored: %d (%s)", dataset.id, score_result.total_score, score_result.status.value)
     return dataset
+
+
+def _create_score_change_notifications(
+    db: Session,
+    dataset: Dataset,
+    old_score: int,
+    new_score: int,
+) -> None:
+    """Create notifications for watchers when score changes."""
+    watchers = (
+        db.query(DatasetWatch)
+        .filter(DatasetWatch.dataset_id == dataset.id)
+        .all()
+    )
+    if not watchers:
+        return
+
+    direction = "increased" if new_score > old_score else "decreased"
+    title = f"Score {direction}: {dataset.display_name}"
+    message = (
+        f"Readiness score for {dataset.display_name} {direction} "
+        f"from {old_score} to {new_score}."
+    )
+
+    for watcher in watchers:
+        notification = Notification(
+            dataset_id=dataset.id,
+            user_id=watcher.user_id,
+            notification_type="score_change",
+            title=title,
+            message=message,
+        )
+        db.add(notification)
+
+    logger.info(
+        "Created %d score_change notifications for dataset %s",
+        len(watchers),
+        dataset.id,
+    )
 
